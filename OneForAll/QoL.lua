@@ -2307,28 +2307,25 @@ function QoL.SetupTipMouse()
     -- Also when the game's fade has started (alpha below what it was when the tooltip was built), in case
     -- "mouseover" still answers during the fade.
     if tt._ofaUnit and QoL.Get("tipFastHide") then
-      if not UnitExists("mouseover") or tt:GetAlpha() < (tt._ofaAlpha or 1) - 0.05 then
+      if tt:GetOwner() ~= tt._ofaOwner then
+        tt._ofaUnit = nil -- taken over by something else (a map pin, a button): not the unit's tooltip any more
+      elseif not UnitExists("mouseover") or tt:GetAlpha() < (tt._ofaAlpha or 1) - 0.05 then
         tt._ofaUnit = nil; tt:Hide()
       end
     end
   end)
-  GameTooltip:HookScript("OnHide", function(tt) tt._ofaMouse = nil; tt._ofaUnit = nil; tt._ofaAlpha = nil end)
-  -- a new owner (a button, a bag slot, the next unit) starts a new tooltip: not the old unit's any more
-  hooksecurefunc(GameTooltip, "SetOwner", function(tt) tt._ofaUnit = nil; tt._ofaAlpha = nil end)
+  GameTooltip:HookScript("OnHide", function(tt) tt._ofaMouse = nil; tt._ofaUnit = nil; tt._ofaAlpha = nil; tt._ofaOwner = nil end)
+  -- No hooks on GameTooltip's own methods (SetOwner, FadeOut): those replaced the methods on the tooltip, so every
+  -- SetOwner of the game's own code (the world map's pins call it all the time) ran through addon code. A new owner
+  -- is noticed in OnUpdate instead (user 14.11.: the world map kept zooming in and out a little).
   local function markUnit(tt)
-    if tt ~= GameTooltip then return end
-    if UnitExists("mouseover") and not tt._ofaUnit then tt._ofaUnit = true; tt._ofaAlpha = tt:GetAlpha() end -- kept while it fades
+    if tt ~= GameTooltip or tt._ofaUnit or not UnitExists("mouseover") then return end
+    tt._ofaUnit = true; tt._ofaAlpha = tt:GetAlpha(); tt._ofaOwner = tt:GetOwner() -- kept while it fades
   end
   if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Unit then
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, markUnit)
   else
     pcall(GameTooltip.HookScript, GameTooltip, "OnTooltipSetUnit", markUnit)
-  end
-  -- the game's own fade: hide at once instead (when the client calls it from Lua)
-  if GameTooltip.FadeOut then
-    pcall(hooksecurefunc, GameTooltip, "FadeOut", function(tt)
-      if tt._ofaUnit and QoL.Get("tipFastHide") then tt._ofaUnit = nil; tt:Hide() end
-    end)
   end
 end
 end
