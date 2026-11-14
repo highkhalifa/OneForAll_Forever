@@ -285,10 +285,17 @@ local function perPx(zoom)
   return 1 / (W * px), 1 / (H * px)
 end
 
--- which zones show, and how strongly, for the view
+-- which zones show, and how strongly, for the view. The zones of the continent drawn last are put away first
+-- when the map shows another (user 14.11.: Eastern Kingdoms' zones stayed on Kalimdor's map)
+local drawnFor
+local function putAway(c)
+  if c then for _, z in ipairs(c.zones) do hideZone(z) end end
+end
 local function refreshArt()
+  local c = active and continent(map:GetMapID()) or nil
+  if drawnFor and drawnFor ~= c then putAway(drawnFor) end
+  drawnFor = c
   if not active then return end
-  local c = continent(map:GetMapID())
   local u, v, zoom = view()
   local a = clamp((zoom - DETAIL_FROM) / (DETAIL_FULL - DETAIL_FROM), 0, 1)
   a = a * a * (3 - 2 * a)
