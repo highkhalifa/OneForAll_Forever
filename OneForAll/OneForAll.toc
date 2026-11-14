@@ -110,6 +110,7 @@ MapLandmarks.lua
 MapQuests.lua
 MapGuild.lua
 UI\MapFog.lua
+UI\SeamlessMap.lua
 UI\MapButton.lua
 Proximity.lua
 UI\Widgets.lua

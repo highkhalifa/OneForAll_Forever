@@ -3231,6 +3231,7 @@ on("classColors", refreshClassColors)
 on("classBright", refreshClassColors)
 on("mapFog", function() if FLT.RefreshMapFog then FLT.RefreshMapFog() end end)
 on("mapFogAlpha", function() if FLT.RefreshMapFog then FLT.RefreshMapFog() end end)
+on("seamlessMap", function() if FLT.SeamlessMap then FLT.SafeCall("SeamlessMap", FLT.SeamlessMap.Refresh) end end)
 on("durability", function() warnedDurability = false; checkDurability() end)
 
 -- Alt+right-click on an item in the bags: on / off the junk list (only while "Sell junk" is on). Bag buttons

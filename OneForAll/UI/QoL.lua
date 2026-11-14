@@ -23,6 +23,7 @@ local NEW_TAGS = { -- the 6.1.x marks removed when 6.2.0 started (rule: marks st
   quiverAmmo = "6.2.2",
   deValue = "6.2.6",
   tipMouse = "6.2.7",
+  seamlessMap = "6.2.9",
   bookAlertNoFlying = "6.2.7",
 }
 -- placed left of the checkbox (or of the label when there is none), user 16.10.
@@ -707,6 +708,8 @@ local function createQoLPanel(parent)
     refreshers[#refreshers + 1] = show
     r.cb:HookScript("OnClick", show) -- greyed out while Remove Fog is off
   end
+  -- 6.2.9: off by default
+  check(g, N"Seamless map", N"All zones of a continent on one map; zoom smoothly with the mouse wheel.", N"The zone maps are drawn on the continent map in full detail. The mouse wheel zooms toward the mouse, drag to move the map. Clicks no longer go into a zone or out of it: a zone map opens as its continent, framed on that zone. Wheel out past the whole continent for the world map, wheel in over a continent there to open it. Zone maps are not switched in combat. Zoom technique adapted from the addon OpenMap (MIT).", "seamlessMap")
   check(g, N"Zone level range", N"The zone's level range at the top right of the world map and when you hover a zone.", N"At the top right of a zone map, and behind the zone name when you hover a zone on the continent map. Gold: your level, red: still too low, grey: you are above it.", "mapZoneLevel")
   g = group(c, N"Flights")
   check2(g, { N"Open flight map at once", N"At a flight master, straight to the flight map.", N"Not when the flight master also has quests for you. Hold Shift to talk normally.", "flightMapNow" },
