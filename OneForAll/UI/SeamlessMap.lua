@@ -3,8 +3,9 @@ local _, FLT = ...
 -- Quality of Life > World Map > Seamless map ("seamlessMap", 6.2.9, off by default): the continent map with
 -- every zone's map drawn on it in full detail, zoomed smoothly with the mouse wheel toward the cursor and moved
 -- by dragging. Clicks no longer go into a zone or out of it: a zone map the game opens shows as the continent,
--- framed on that zone. Wheel out past the whole continent for the world map, wheel in over a continent there to
--- open it.
+-- framed on that zone. The world map zooms the same way: once the continent being zoomed into fills the view the
+-- map hands over to it at the same place and size, and out of a continent back to the world (6.2.9-test4, user
+-- 14.11.: the jump between them was not seamless).
 --
 -- What is drawn: Blizzard's continent art (the map's own), and over it each zone's map pieces (Data/MapOverlays.lua,
 -- the same pieces as Remove Fog) placed by C_Map.GetMapRectOnMap: the explored ones, the others only with Remove Fog. Each zone's base map is a rectangle that also
@@ -103,6 +104,46 @@ local function continent(mapID)
   for _, z in ipairs(keep) do c.byZone[z.mapID] = z end
   continents[mapID] = c
   return c
+end
+
+-- a world map with stitched continents on it: { mapID, conts = { { mapID, l, r, t, b } }, byCont }
+local worlds = {}
+local function worldOf(mapID)
+  if not mapID then return nil end
+  if worlds[mapID] ~= nil then return worlds[mapID] or nil end
+  worlds[mapID] = false
+  local info = C_Map.GetMapInfo(mapID)
+  if not (info and info.mapType == Enum.UIMapType.World) then return nil end
+  local w = { mapID = mapID, conts = {}, byCont = {} }
+  for _, child in ipairs(C_Map.GetMapChildrenInfo(mapID, Enum.UIMapType.Continent, false) or {}) do
+    local l, r, t, b = C_Map.GetMapRectOnMap(child.mapID, mapID)
+    if l and r > l and b > t and continent(child.mapID) then
+      local c = { mapID = child.mapID, l = l, r = r, t = t, b = b }
+      w.conts[#w.conts + 1] = c
+      w.byCont[child.mapID] = c
+    end
+  end
+  if #w.conts == 0 then return nil end
+  worlds[mapID] = w
+  return w
+end
+-- the continent on the world at (u, v): the smallest whose rectangle holds it
+local function continentAt(w, u, v)
+  local best, area
+  for _, c in ipairs(w.conts) do
+    if u >= c.l and u <= c.r and v >= c.t and v <= c.b then
+      local a = (c.r - c.l) * (c.b - c.t)
+      if not best or a < area then best, area = c, a end
+    end
+  end
+  return best
+end
+-- the world a continent hands over to when zoomed out of, and its place there
+local function worldAbove(mapID)
+  local info = C_Map.GetMapInfo(mapID)
+  local w = info and worldOf(info.parentMapID)
+  local c = w and w.byCont[mapID]
+  if c then return w, c end
 end
 
 -- the continent a zone map belongs to, when that continent is stitched
@@ -232,12 +273,15 @@ local function setView(scale, x, y)
   if sc.MarkAreaTriggersDirty then sc:MarkAreaTriggersDirty() end
   if sc.MarkViewRectDirty then sc:MarkViewRectDirty() end
 end
+local wideView -- below: setView with the zoom's pan room
 local function showAt(u, v, zoom) setView(zoom * fitScale(), u, v) end
 
 local function deepestZoom()
-  local c = continent(map:GetMapID())
+  local id = map:GetMapID()
+  local c = continent(id) or worldOf(id)
   return c and c.deepest or 8
 end
+local function inCombat() return InCombatLockdown and InCombatLockdown() end
 
 -- the cursor's offset from the view's centre, in view px (y down)
 local function cursorOffset()
@@ -273,13 +317,55 @@ local function refreshArt()
   end
 end
 
+-- The point the wheel zooms toward: the one under the cursor, kept while the mouse stays where it is (user
+-- 14.11.: near an edge the view could not hold it under the cursor yet, the next notch took the sea there
+-- instead). A mouse move, a drag or another map picks a new one.
+local STILL_PX = 3
+local anchor -- { u, v, sx, sy, mapID }
 local function zoomAtCursor(factor)
   local u, v, zoom = view()
   local sx, sy = cursorOffset()
-  local pu, pv = perPx(zoom)
+  local a = anchor
+  if not (a and a.mapID == map:GetMapID() and math.abs(a.sx - sx) <= STILL_PX and math.abs(a.sy - sy) <= STILL_PX) then
+    local pu, pv = perPx(zoom)
+    a = { u = u + sx * pu, v = v + sy * pv, sx = sx, sy = sy, mapID = map:GetMapID() }
+    anchor = a
+  end
   local from = anim and anim.target or zoom
-  local target = clamp(from * factor, 1, deepestZoom())
-  anim = { u = u + sx * pu, v = v + sy * pv, sx = sx, sy = sy, target = target }
+  local least = (worldAbove(map:GetMapID()) and not inCombat()) and 0.05 or 1 -- (the world takes over below 1)
+  local target = clamp(from * factor, least, deepestZoom())
+  anim = { u = a.u, v = a.v, sx = a.sx, sy = a.sy, target = target }
+end
+
+-- The hand-overs. A continent's art is its rectangle on the world map, so a view of the world at zoom z is the
+-- continent's view at z * (its width on the world): the same place, the same size on screen.
+local function handOver(toMap, a, cu, cv, zoom, au, av, target)
+  map:SetMapID(toMap)
+  if not active then anim = nil; return end
+  wideView(cu, cv, zoom)
+  anchor = { u = au, v = av, sx = a.sx, sy = a.sy, mapID = toMap }
+  target = clamp(target, 1, deepestZoom())
+  anim = { u = au, v = av, sx = a.sx, sy = a.sy, target = target, down = a.down }
+  if math.abs(math.log(target / zoom)) < 0.003 then anim = nil end
+end
+-- world -> continent, once the continent the zoom goes toward fills the view
+local function intoContinent(a, zoom)
+  local w = worldOf(map:GetMapID())
+  local c = w and continentAt(w, a.u, a.v)
+  if not c or zoom * (c.r - c.l) < 1 or inCombat() then return false end
+  local x, y = view()
+  local k, kv = c.r - c.l, c.b - c.t
+  handOver(c.mapID, a, (x - c.l) / k, (y - c.t) / kv, zoom * k, (a.u - c.l) / k, (a.v - c.t) / kv, a.target * k)
+  return true
+end
+-- continent -> world, zoomed out past the whole continent
+local function outToWorld(a)
+  local w, c = worldAbove(map:GetMapID())
+  if not w or inCombat() then return false end
+  local x, y = view()
+  local k, kv = c.r - c.l, c.b - c.t
+  handOver(w.mapID, a, c.l + x * k, c.t + y * kv, 1 / k, c.l + a.u * k, c.t + a.v * kv, a.target / k)
+  return true
 end
 
 -- after Blizzard's own OnUpdate, so its panning never adds to ours
@@ -291,8 +377,15 @@ local function animate(_, elapsed)
   local zoom = math.exp(math.log(z) + (math.log(a.target) - math.log(z)) * (1 - math.exp(-elapsed * ZOOM_RATE)))
   local done = math.abs(math.log(a.target / zoom)) < 0.003
   if done then zoom = a.target end
+  -- out past the whole continent: on in the world map (or, without one, stop at the whole continent)
+  if zoom <= 1 and a.target < 1 and continent(map:GetMapID()) then
+    if z <= 1.0005 and outToWorld(a) then return end
+    zoom = 1
+    if z <= 1.0005 then a.target, done = 1, true end
+  end
   local info = sc.mouseButtonInfo and sc.mouseButtonInfo.LeftButton
   local down = info and info.down
+  if down then anchor = nil end
   if down and not a.down then
     -- grabbed mid-zoom: what's under the cursor now is what the cursor carries
     local u, v = view()
@@ -304,18 +397,51 @@ local function animate(_, elapsed)
   end
   a.down = down
   local pu, pv = perPx(zoom)
-  showAt(a.u - a.sx * pu, a.v - a.sy * pv, zoom)
+  wideView(a.u - a.sx * pu, a.v - a.sy * pv, zoom)
   if done then anim = nil end
+  if worldOf(map:GetMapID()) then intoContinent(a, zoom) end
 end
 
 --------------------------------------------------------------------------------
 -- Hooks into Blizzard's map
 --------------------------------------------------------------------------------
 
+-- Pan room past the continent's edges (as OpenMap's Extents; Blizzard's own when not stitched): for a drag half
+-- the view; while the wheel zooms (wide) as much as keeps the point under the cursor there, even at the
+-- continent's edge with the cursor at the view's; and never less than where the view is now, so a drag after
+-- such a zoom does not jump.
+local SLACK = 0.5
+local wide = false
+local function range(half, slack)
+  local lo, hi = half, 1 - half
+  if lo > hi then lo, hi = 0.5, 0.5 end
+  return lo - slack, hi + slack
+end
+local function extents(orig)
+  return function(self, scale)
+    if not active then return orig(self, scale) end
+    local hw = self:NormalizeHorizontalSize(self:GetWidth() * 0.5 / scale)
+    local hh = self:NormalizeVerticalSize(self:GetHeight() * 0.5 / scale)
+    local k = wide and 2 or 2 * SLACK
+    local minX, maxX = range(hw, hw * k)
+    local minY, maxY = range(hh, hh * k)
+    local x, y = self.currentScrollX, self.currentScrollY
+    if x and y then minX, maxX, minY, maxY = math.min(minX, x), math.max(maxX, x), math.min(minY, y), math.max(maxY, y) end
+    return minX, maxX, minY, maxY
+  end
+end
+
+wideView = function(u, v, zoom)
+  wide = true
+  local ok, err = pcall(showAt, u, v, zoom)
+  wide = false
+  if not ok then error(err, 0) end
+end
+
 local hookHighlight -- below
 local function attach()
   local mapID = map:GetMapID()
-  active = (on() and mapID and continent(mapID)) and true or false
+  active = (on() and mapID and (continent(mapID) or worldOf(mapID))) and true or false
   if active then
     hookHighlight()
     sc:SetMouseWheelZoomMode(MAP_CANVAS_MOUSE_WHEEL_ZOOM_BEHAVIOR_NONE)
@@ -333,6 +459,13 @@ local function onCreateZoomLevels(self)
   attach()
   if not active then return end
   local c = continent(map:GetMapID())
+  local w = not c and worldOf(map:GetMapID())
+  if w and not w.deepest then
+    local most = 1
+    for _, cont in ipairs(w.conts) do most = math.max(most, 1 / (cont.r - cont.l)) end
+    w.deepest = most * ZOOM_STEP
+  end
+  c = c or w
   if not c.deepest then
     local W = canvasSize()
     local list = {}
@@ -382,27 +515,9 @@ local function onMapChanged()
   refreshArt()
 end
 
+-- the wheel: a step toward the point under the cursor (the world and continents hand over in animate)
 local function onMouseWheel(_, delta)
-  if active then
-    local _, _, zoom = view()
-    -- out past the whole continent: the world map
-    if delta < 0 and zoom <= 1.001 and not anim and not (InCombatLockdown and InCombatLockdown()) then
-      local info = C_Map.GetMapInfo(map:GetMapID())
-      if info and info.parentMapID and info.parentMapID > 0 then map:SetMapID(info.parentMapID) end
-      return
-    end
-    zoomAtCursor(delta > 0 and ZOOM_STEP or 1 / ZOOM_STEP)
-    return
-  end
-  -- the world map: in over a continent opens it
-  if not on() or delta <= 0 or (InCombatLockdown and InCombatLockdown()) then return end
-  local info = C_Map.GetMapInfo(map:GetMapID())
-  if not (info and info.mapType == Enum.UIMapType.World) then return end
-  local x, y = map:GetNormalizedCursorPosition()
-  local under = x and C_Map.GetMapInfoAtPosition(map:GetMapID(), x, y)
-  local id = under and under.mapID
-  if id and not continent(id) then local info2 = C_Map.GetMapInfo(id); id = info2 and info2.parentMapID end
-  if id and continent(id) then map:SetMapID(id) end
+  if active then zoomAtCursor(delta > 0 and ZOOM_STEP or 1 / ZOOM_STEP) end
 end
 
 -- clicks on the stitched map do nothing (no zone in, no map out); a drag still moves the map
@@ -446,6 +561,9 @@ local function setup()
   pieceFrame = CreateFrame("Frame", nil, canvas)
   pieceFrame:SetAllPoints(canvas); pieceFrame:SetFrameLevel(level + 1); pieceFrame:Hide()
 
+  if sc.CalculateScrollExtentsAtScale and sc.NormalizeHorizontalSize then
+    sc.CalculateScrollExtentsAtScale = extents(sc.CalculateScrollExtentsAtScale)
+  end
   hooksecurefunc(sc, "CreateZoomLevels", function(self) FLT.SafeCall("SeamlessMap", onCreateZoomLevels, self) end)
   hooksecurefunc(sc, "ResetZoom", function() FLT.SafeCall("SeamlessMap", onResetZoom) end)
   hooksecurefunc(map, "OnMapChanged", function() FLT.SafeCall("SeamlessMap", onMapChanged) end)
