@@ -2,8 +2,9 @@ local _, FLT = ...
 
 -- Quality of Life > World Map > Seamless map ("seamlessMap", 6.2.9, off by default): the continent map with
 -- every zone's map drawn on it in full detail, zoomed smoothly with the mouse wheel toward the cursor and moved
--- by dragging. Left- and right-click work as on Blizzard's map (user 14.11.: keep their own function): into a
--- zone's own map and back out. A zone map the game opens by itself (the map opening on your zone, a quest, OneForAll's
+-- by dragging. Left- and right-click work as on Blizzard's map, on the stitched map (user 14.11.): a left-click
+-- jumps into the zone under the cursor, framed on it; a right-click out of the zone to the whole continent, and
+-- from there to the world. A zone map the game opens (the map opening on your zone, a click, a quest, OneForAll's
 -- buttons) shows as the continent, framed on that zone. The world map zooms the same way: once the continent being zoomed into fills the view the
 -- map hands over to it at the same place and size, and out of a continent back to the world (6.2.9-test4, user
 -- 14.11.: the jump between them was not seamless).
@@ -498,10 +499,9 @@ end
 -- a zone map the game opens (the map opening on your zone, a quest, OneForAll's own buttons) shows as its
 -- continent, framed on the zone. Not in combat: Blizzard's map isn't switched then
 local redirecting = false
-local clickedAt -- (onCanvasClick, below)
 local function onMapChanged()
   local mapID = map:GetMapID()
-  if not redirecting and clickedAt ~= GetTime() and on() and not (InCombatLockdown and InCombatLockdown()) then
+  if not redirecting and on() and not (InCombatLockdown and InCombatLockdown()) then
     local c, z = continentOf(mapID)
     if c then
       focus = { mapID = c.mapID, l = z.l, r = z.r, t = z.t, b = z.b, at = GetTime() }
@@ -522,10 +522,40 @@ local function onMouseWheel(_, delta)
   if active then zoomAtCursor(delta > 0 and ZOOM_STEP or 1 / ZOOM_STEP) end
 end
 
--- clicks are Blizzard's (into the zone's own map, back out): only noted, so the zone map a click opens isn't
--- turned into the continent (onMapChanged)
+-- the zone of a continent at (u, v): the smallest whose rectangle holds it
+local function zoneAt(c, u, v)
+  local best, area
+  for _, z in ipairs(c.zones) do
+    if u >= z.l and u <= z.r and v >= z.t and v <= z.b then
+      local a = (z.r - z.l) * (z.b - z.t)
+      if not best or a < area then best, area = z, a end
+    end
+  end
+  return best
+end
+
+-- Clicks as on Blizzard's map, one map level at a time. Its own left-click opens the zone under the cursor, which
+-- comes back as the continent framed on it (onMapChanged); its right-click goes to the world. On the stitched
+-- continent, though, a view inside a zone stands for the zone's map: there a right-click shows the whole continent,
+-- and a left-click does nothing (as on a zone map)
 local function onCanvasClick(_, button)
-  if button == "LeftButton" or button == "RightButton" then clickedAt = GetTime() end
+  local c = active and continent(map:GetMapID())
+  if not c then return false end
+  local u, v, zoom = view()
+  if button == "RightButton" and zoom > 1.05 then
+    anim, anchor = nil, nil
+    showAt(0.5, 0.5, 1)
+    refreshArt()
+    return true
+  end
+  if button == "LeftButton" then
+    local sx, sy = cursorOffset()
+    local pu, pv = perPx(zoom)
+    local z = zoneAt(c, u + sx * pu, v + sy * pv)
+    local W, H = canvasSize()
+    local fit = z and math.min(sc:GetWidth() / ((z.r - z.l) * W), sc:GetHeight() / ((z.b - z.t) * H)) / fitScale()
+    if fit and zoom >= fit * 0.85 then return true end
+  end
   return false
 end
 
