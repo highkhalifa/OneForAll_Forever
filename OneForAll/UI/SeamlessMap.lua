@@ -2,8 +2,9 @@ local _, FLT = ...
 
 -- Quality of Life > World Map > Seamless map ("seamlessMap", 6.2.9, off by default): the continent map with
 -- every zone's map drawn on it in full detail, zoomed smoothly with the mouse wheel toward the cursor and moved
--- by dragging. Clicks no longer go into a zone or out of it: a zone map the game opens shows as the continent,
--- framed on that zone. The world map zooms the same way: once the continent being zoomed into fills the view the
+-- by dragging. Left- and right-click work as on Blizzard's map (user 14.11.: keep their own function): into a
+-- zone's own map and back out. A zone map the game opens by itself (the map opening on your zone, a quest, OneForAll's
+-- buttons) shows as the continent, framed on that zone. The world map zooms the same way: once the continent being zoomed into fills the view the
 -- map hands over to it at the same place and size, and out of a continent back to the world (6.2.9-test4, user
 -- 14.11.: the jump between them was not seamless).
 --
@@ -497,9 +498,10 @@ end
 -- a zone map the game opens (the map opening on your zone, a quest, OneForAll's own buttons) shows as its
 -- continent, framed on the zone. Not in combat: Blizzard's map isn't switched then
 local redirecting = false
+local clickedAt -- (onCanvasClick, below)
 local function onMapChanged()
   local mapID = map:GetMapID()
-  if not redirecting and on() and not (InCombatLockdown and InCombatLockdown()) then
+  if not redirecting and clickedAt ~= GetTime() and on() and not (InCombatLockdown and InCombatLockdown()) then
     local c, z = continentOf(mapID)
     if c then
       focus = { mapID = c.mapID, l = z.l, r = z.r, t = z.t, b = z.b, at = GetTime() }
@@ -520,10 +522,11 @@ local function onMouseWheel(_, delta)
   if active then zoomAtCursor(delta > 0 and ZOOM_STEP or 1 / ZOOM_STEP) end
 end
 
--- clicks on the stitched map do nothing (no zone in, no map out); a drag still moves the map
+-- clicks are Blizzard's (into the zone's own map, back out): only noted, so the zone map a click opens isn't
+-- turned into the continent (onMapChanged)
 local function onCanvasClick(_, button)
-  if not active then return false end
-  return button == "LeftButton" or button == "RightButton"
+  if button == "LeftButton" or button == "RightButton" then clickedAt = GetTime() end
+  return false
 end
 
 -- Blizzard's zone highlight under the cursor is the continent's low detail art: away once the zones show
