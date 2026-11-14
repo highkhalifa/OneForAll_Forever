@@ -1,13 +1,10 @@
 local _, FLT = ...
 
--- Quality of Life > World Map > Seamless map ("seamlessMap", 6.2.9, off by default): the continent map with
--- every zone's map drawn on it in full detail, zoomed smoothly with the mouse wheel toward the cursor and moved
--- by dragging. Left- and right-click work as on Blizzard's map, on the stitched map (user 14.11.): a left-click
--- jumps into the zone under the cursor, framed on it; a right-click out of the zone to the whole continent, and
--- from there to the world. A zone map the game opens (the map opening on your zone, a click, a quest, OneForAll's
--- buttons) shows as the continent, framed on that zone. The world map zooms the same way: once the continent being zoomed into fills the view the
--- map hands over to it at the same place and size, and out of a continent back to the world (6.2.9-test4, user
--- 14.11.: the jump between them was not seamless).
+-- Quality of Life > World Map > Seamless map ("seamlessMap", 6.2.9, off by default). Two things on top of
+-- Blizzard's map, which otherwise works as it always does (user 14.11.: only the smooth wheel and the stitched zones):
+-- - the continent map has every zone's map drawn on it in full detail, fading in as you zoom in;
+-- - the mouse wheel zooms smoothly toward the cursor on the world, continent and zone maps, and with the wheel the
+--   world map hands over to a continent (and back) at the same place and size, so that zoom has no jump.
 --
 -- What is drawn: Blizzard's continent art (the map's own), and over it each zone's map pieces (Data/MapOverlays.lua,
 -- the same pieces as Remove Fog) placed by C_Map.GetMapRectOnMap: the explored ones, the others only with Remove Fog. Each zone's base map is a rectangle that also
@@ -27,12 +24,11 @@ local CULL_MARGIN = 0.15      -- zones this far (view sizes) outside the view st
 local CITIES = { [1453] = true, [1454] = true, [1455] = true, [1456] = true, [1457] = true, [1458] = true }
 
 local map, sc                 -- WorldMapFrame, its ScrollContainer
-local active = false          -- the stitched art is showing (a continent map, the option on)
+local active = false          -- ours: the option on and a world, continent or zone map showing
 local anim                    -- the running wheel zoom: { u, v, sx, sy, target, down }
 local wheelMode, scalingMode  -- Blizzard's, put back when not stitched
 local baseFrame, pieceFrame   -- the art: zone base maps (test switch only) under the zone pieces
 local continents = {}         -- continent mapID -> { zones = { ... }, deepest = scale } (built once per continent)
-local focus                   -- { mapID = continent, l, r, t, b, at = GetTime() }: the zone a redirect frames
 local showBase = false        -- /ofa seamlessbase: also the zones' base maps (for testing the look)
 
 local function on() return FLT.QoL and FLT.QoL.Get("seamlessMap") end
@@ -45,11 +41,10 @@ local function canvasSize()
   if w <= 0 or h <= 0 then return 1002, 668 end
   return w, h
 end
--- the view's scale zoomed right out: the canvas fills the view (user 14.11.: no empty bars when the window
--- isn't the map's shape; the overhang, open sea, is reached by dragging)
+-- the view's scale zoomed right out: the whole map fits, as on Blizzard's map
 local function fitScale()
   local W, H = canvasSize()
-  return math.max(sc:GetWidth() / W, sc:GetHeight() / H)
+  return math.min(sc:GetWidth() / W, sc:GetHeight() / H)
 end
 
 --------------------------------------------------------------------------------
@@ -147,21 +142,6 @@ local function worldAbove(mapID)
   local w = info and worldOf(info.parentMapID)
   local c = w and w.byCont[mapID]
   if c then return w, c end
-end
-
--- the continent a zone map belongs to, when that continent is stitched
-local function continentOf(mapID)
-  local info = mapID and C_Map.GetMapInfo(mapID)
-  if not (info and info.mapType == Enum.UIMapType.Zone) then return nil end
-  local parent = info.parentMapID
-  local c = parent and continent(parent)
-  if not c then return nil end
-  local z = c.byZone[mapID]
-  if z then return c, z end
-  -- a city: framed on its own rectangle
-  local l, r, t, b = C_Map.GetMapRectOnMap(mapID, parent)
-  if l and r > l and b > t then return c, { l = l, r = r, t = t, b = b } end
-  return nil
 end
 
 -- the textures of one zone, made the first time it shows (canvas px: the canvas scales them)
@@ -267,8 +247,10 @@ local function setView(scale, x, y)
   sc.currentScale, sc.targetScale, sc.zoomTarget = scale, scale, scale
   sc.Child:SetScale(scale)
   sc:CalculateScrollExtents()
-  x = clamp(x, sc.scrollXExtentsMin or 0, sc.scrollXExtentsMax or 1)
-  y = clamp(y, sc.scrollYExtentsMin or 0, sc.scrollYExtentsMax or 1)
+  -- (within Blizzard's own pan limits; on a side where the view is bigger than the map, centred)
+  local x0, x1, y0, y1 = sc.scrollXExtentsMin or 0, sc.scrollXExtentsMax or 1, sc.scrollYExtentsMin or 0, sc.scrollYExtentsMax or 1
+  x = x0 > x1 and (x0 + x1) / 2 or clamp(x, x0, x1)
+  y = y0 > y1 and (y0 + y1) / 2 or clamp(y, y0, y1)
   sc.targetScrollX, sc.targetScrollY, sc.currentScrollX, sc.currentScrollY = x, y, x, y
   sc:SetNormalizedHorizontalScroll(x)
   sc:SetNormalizedVerticalScroll(y)
@@ -276,13 +258,17 @@ local function setView(scale, x, y)
   if sc.MarkAreaTriggersDirty then sc:MarkAreaTriggersDirty() end
   if sc.MarkViewRectDirty then sc:MarkViewRectDirty() end
 end
-local wideView -- below
 local function showAt(u, v, zoom) setView(zoom * fitScale(), u, v) end
 
+local ZONE_DEEPEST = 4 -- a zone map's deepest zoom (its own art: 4 screen px per map px at most)
+local function isZone(mapID)
+  local info = mapID and C_Map.GetMapInfo(mapID)
+  return info and info.mapType == Enum.UIMapType.Zone or false
+end
 local function deepestZoom()
   local id = map:GetMapID()
   local c = continent(id) or worldOf(id)
-  return c and c.deepest or 8
+  return c and c.deepest or ZONE_DEEPEST
 end
 local function inCombat() return InCombatLockdown and InCombatLockdown() end
 
@@ -345,7 +331,7 @@ end
 local function handOver(toMap, a, cu, cv, zoom, au, av, target)
   map:SetMapID(toMap)
   if not active then anim = nil; return end
-  wideView(cu, cv, zoom)
+  showAt(cu, cv, zoom)
   anchor = { u = au, v = av, sx = a.sx, sy = a.sy, mapID = toMap }
   target = clamp(target, 1, deepestZoom())
   anim = { u = au, v = av, sx = a.sx, sy = a.sy, target = target, down = a.down }
@@ -405,7 +391,7 @@ local function animate(_, elapsed)
   end
   a.down = down
   local pu, pv = perPx(zoom)
-  wideView(a.u - a.sx * pu, a.v - a.sy * pv, zoom)
+  showAt(a.u - a.sx * pu, a.v - a.sy * pv, zoom)
   if done then anim = nil end
   if worldOf(map:GetMapID()) then intoContinent(a, zoom) end
 end
@@ -414,29 +400,10 @@ end
 -- Hooks into Blizzard's map
 --------------------------------------------------------------------------------
 
--- The view stays on the map: never past its edges (user 14.11.: no empty space, not even near a coast, and no
--- dragging it off). Blizzard's own extents when not stitched; on a side where the view is wider than the map,
--- centred.
-local function range(half)
-  if half >= 0.5 then return 0.5, 0.5 end
-  return half, 1 - half
-end
-local function extents(orig)
-  return function(self, scale)
-    if not active then return orig(self, scale) end
-    local minX, maxX = range(self:NormalizeHorizontalSize(self:GetWidth() * 0.5 / scale))
-    local minY, maxY = range(self:NormalizeVerticalSize(self:GetHeight() * 0.5 / scale))
-    return minX, maxX, minY, maxY
-  end
-end
-wideView = showAt
-
-local hookHighlight -- below
 local function attach()
   local mapID = map:GetMapID()
-  active = (on() and mapID and (continent(mapID) or worldOf(mapID))) and true or false
+  active = (on() and mapID and (continent(mapID) or worldOf(mapID) or isZone(mapID))) and true or false
   if active then
-    hookHighlight()
     sc:SetMouseWheelZoomMode(MAP_CANVAS_MOUSE_WHEEL_ZOOM_BEHAVIOR_NONE)
     if sc.SetScalingMode then sc:SetScalingMode("SCALING_MODE_LINEAR") end
   else
@@ -447,7 +414,8 @@ local function attach()
   end
 end
 
--- zoom levels from the whole continent to DEEPEST screen px per zone map px
+-- zoom levels from the whole map down: a continent to DEEPEST screen px per zone map px, the world to past where
+-- its continents hand over, a zone to ZONE_DEEPEST
 local function onCreateZoomLevels(self)
   attach()
   if not active then return end
@@ -458,7 +426,7 @@ local function onCreateZoomLevels(self)
     for _, cont in ipairs(w.conts) do most = math.max(most, 1 / (cont.r - cont.l)) end
     w.deepest = most * ZOOM_STEP ^ 3 -- (room to zoom on till the view is on the continent, off its middle)
   end
-  c = c or w
+  c = c or w or { deepest = ZONE_DEEPEST }
   if not c.deepest then
     local W = canvasSize()
     local list = {}
@@ -475,35 +443,12 @@ local function onCreateZoomLevels(self)
   self.baseScale = levels[1].scale
 end
 
--- after Blizzard's zoom reset (each map change and opening): framed on the zone the redirect came from
+-- after Blizzard's zoom reset (each map change and opening): the zones' detail for that view
 local function onResetZoom()
-  if not active then return end
-  local f = focus
-  if f and f.mapID == map:GetMapID() and f.at == GetTime() then
-    local W, H = canvasSize()
-    local zoom = math.min(sc:GetWidth() / ((f.r - f.l) * W), sc:GetHeight() / ((f.b - f.t) * H)) / fitScale()
-    showAt((f.l + f.r) / 2, (f.t + f.b) / 2, clamp(zoom * 0.95, 1, deepestZoom()))
-  end
-  refreshArt()
+  if active then refreshArt() end
 end
 
--- a zone map the game opens (the map opening on your zone, a quest, OneForAll's own buttons) shows as its
--- continent, framed on the zone. Not in combat: Blizzard's map isn't switched then
-local redirecting = false
 local function onMapChanged()
-  local mapID = map:GetMapID()
-  if not redirecting and on() and not (InCombatLockdown and InCombatLockdown()) then
-    local c, z = continentOf(mapID)
-    if c then
-      focus = { mapID = c.mapID, l = z.l, r = z.r, t = z.t, b = z.b, at = GetTime() }
-      redirecting = true
-      local ok, err = pcall(map.SetMapID, map, c.mapID)
-      redirecting = false
-      if not ok then error(err, 0) end
-      onResetZoom()
-      return
-    end
-  end
   attach()
   refreshArt()
 end
@@ -513,62 +458,13 @@ local function onMouseWheel(_, delta)
   if active then zoomAtCursor(delta > 0 and ZOOM_STEP or 1 / ZOOM_STEP) end
 end
 
--- the zone of a continent at (u, v): the smallest whose rectangle holds it
-local function zoneAt(c, u, v)
-  local best, area
-  for _, z in ipairs(c.zones) do
-    if u >= z.l and u <= z.r and v >= z.t and v <= z.b then
-      local a = (z.r - z.l) * (z.b - z.t)
-      if not best or a < area then best, area = z, a end
-    end
-  end
-  return best
-end
-
--- Clicks as on Blizzard's map, one map level at a time. Its own left-click opens the zone under the cursor, which
--- comes back as the continent framed on it (onMapChanged); its right-click goes to the world. On the stitched
--- continent, though, a view inside a zone stands for the zone's map: there a right-click shows the whole continent,
--- and a left-click does nothing (as on a zone map)
-local function onCanvasClick(_, button)
-  local c = active and continent(map:GetMapID())
-  if not c then return false end
-  local u, v, zoom = view()
-  if button == "RightButton" and zoom > 1.05 then
-    anim, anchor = nil, nil
-    showAt(0.5, 0.5, 1)
-    refreshArt()
-    return true
-  end
-  if button == "LeftButton" then
-    local sx, sy = cursorOffset()
-    local pu, pv = perPx(zoom)
-    local z = zoneAt(c, u + sx * pu, v + sy * pv)
-    local W, H = canvasSize()
-    local fit = z and math.min(sc:GetWidth() / ((z.r - z.l) * W), sc:GetHeight() / ((z.b - z.t) * H)) / fitScale()
-    if fit and zoom >= fit * 0.85 then return true end
-  end
-  return false
-end
-
--- Blizzard's zone highlight under the cursor is the continent's low detail art: away once the zones show
-hookHighlight = function()
-  for pin in map:EnumeratePinsByTemplate("MapHighlightPinTemplate") do
-    if not pin.ofaSeamless and pin.Refresh and pin.HighlightTexture then
-      pin.ofaSeamless = true
-      hooksecurefunc(pin, "Refresh", function(self)
-        if active and select(3, view()) >= DETAIL_FROM then self.HighlightTexture:Hide() end
-      end)
-    end
-  end
-end
-
 local ready = false
 local function setup()
   if ready then return true end
   map = _G.WorldMapFrame
   sc = map and map.ScrollContainer
   if not (sc and sc.CreateZoomLevels and sc.ResetZoom and sc.SetMouseWheelZoomMode and map.GetPinFrameLevelsManager
-    and map.AddCanvasClickHandler and C_Map and C_Map.GetMapRectOnMap and C_Map.GetMapChildrenInfo and Enum and Enum.UIMapType) then
+    and C_Map and C_Map.GetMapRectOnMap and C_Map.GetMapChildrenInfo and Enum and Enum.UIMapType) then
     return false
   end
   ready = true
@@ -585,18 +481,13 @@ local function setup()
   pieceFrame = CreateFrame("Frame", nil, canvas)
   pieceFrame:SetAllPoints(canvas); pieceFrame:SetFrameLevel(level + 1); pieceFrame:Hide()
 
-  if sc.CalculateScrollExtentsAtScale and sc.NormalizeHorizontalSize then
-    sc.CalculateScrollExtentsAtScale = extents(sc.CalculateScrollExtentsAtScale)
-  end
   hooksecurefunc(sc, "CreateZoomLevels", function(self) FLT.SafeCall("SeamlessMap", onCreateZoomLevels, self) end)
   hooksecurefunc(sc, "ResetZoom", function() FLT.SafeCall("SeamlessMap", onResetZoom) end)
   hooksecurefunc(map, "OnMapChanged", function() FLT.SafeCall("SeamlessMap", onMapChanged) end)
   sc:HookScript("OnMouseWheel", function(_, delta) FLT.SafeCall("SeamlessMap", onMouseWheel, nil, delta) end)
   sc:HookScript("OnUpdate", function(_, elapsed) if anim then FLT.SafeCall("SeamlessMap", animate, nil, elapsed) end end)
-  map:AddCanvasClickHandler(onCanvasClick, 1000)
   if map.OnCanvasScaleChanged then hooksecurefunc(map, "OnCanvasScaleChanged", function() FLT.SafeCall("SeamlessMap", refreshArt) end) end
   if map.OnCanvasPanChanged then hooksecurefunc(map, "OnCanvasPanChanged", function() FLT.SafeCall("SeamlessMap", refreshArt) end) end
-  hookHighlight()
   return true
 end
 
@@ -613,8 +504,6 @@ function SM.Refresh()
     end
     return
   end
-  local mapID = map:GetMapID()
-  if mapID and continentOf(mapID) then onMapChanged(); return end -- a zone: shown as its continent
   sc:CreateZoomLevels() -- ours (onCreateZoomLevels)
   sc:ResetZoom()
 end
