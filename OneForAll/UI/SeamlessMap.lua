@@ -45,10 +45,11 @@ local function canvasSize()
   if w <= 0 or h <= 0 then return 1002, 668 end
   return w, h
 end
--- the view's scale where the whole canvas fits
+-- the view's scale zoomed right out: the canvas fills the view (user 14.11.: no empty bars when the window
+-- isn't the map's shape; the overhang, open sea, is reached by dragging)
 local function fitScale()
   local W, H = canvasSize()
-  return math.min(sc:GetWidth() / W, sc:GetHeight() / H)
+  return math.max(sc:GetWidth() / W, sc:GetHeight() / H)
 end
 
 --------------------------------------------------------------------------------
@@ -275,7 +276,7 @@ local function setView(scale, x, y)
   if sc.MarkAreaTriggersDirty then sc:MarkAreaTriggersDirty() end
   if sc.MarkViewRectDirty then sc:MarkViewRectDirty() end
 end
-local wideView -- below: setView with the zoom's pan room
+local wideView -- below
 local function showAt(u, v, zoom) setView(zoom * fitScale(), u, v) end
 
 local function deepestZoom()
@@ -350,12 +351,17 @@ local function handOver(toMap, a, cu, cv, zoom, au, av, target)
   anim = { u = au, v = av, sx = a.sx, sy = a.sy, target = target, down = a.down }
   if math.abs(math.log(target / zoom)) < 0.003 then anim = nil end
 end
--- world -> continent, once the continent the zoom goes toward fills the view
+-- world -> continent, once all the view shows lies on the continent's map (its view there then needs no
+-- clamping: nothing moves)
 local function intoContinent(a, zoom)
   local w = worldOf(map:GetMapID())
   local c = w and continentAt(w, a.u, a.v)
   if not c or zoom * (c.r - c.l) < 1 or inCombat() then return false end
   local x, y = view()
+  local pu, pv = perPx(zoom)
+  local hu, hv = sc:GetWidth() / 2 * pu, sc:GetHeight() / 2 * pv
+  local e = 1e-6
+  if x - hu < c.l - e or x + hu > c.r + e or y - hv < c.t - e or y + hv > c.b + e then return false end
   local k, kv = c.r - c.l, c.b - c.t
   handOver(c.mapID, a, (x - c.l) / k, (y - c.t) / kv, zoom * k, (a.u - c.l) / k, (a.v - c.t) / kv, a.target * k)
   return true
@@ -408,37 +414,22 @@ end
 -- Hooks into Blizzard's map
 --------------------------------------------------------------------------------
 
--- Pan room past the continent's edges (as OpenMap's Extents; Blizzard's own when not stitched): for a drag half
--- the view; while the wheel zooms (wide) as much as keeps the point under the cursor there, even at the
--- continent's edge with the cursor at the view's; and never less than where the view is now, so a drag after
--- such a zoom does not jump.
-local SLACK = 0.5
-local wide = false
-local function range(half, slack)
-  local lo, hi = half, 1 - half
-  if lo > hi then lo, hi = 0.5, 0.5 end
-  return lo - slack, hi + slack
+-- The view stays on the map: never past its edges (user 14.11.: no empty space, not even near a coast, and no
+-- dragging it off). Blizzard's own extents when not stitched; on a side where the view is wider than the map,
+-- centred.
+local function range(half)
+  if half >= 0.5 then return 0.5, 0.5 end
+  return half, 1 - half
 end
 local function extents(orig)
   return function(self, scale)
     if not active then return orig(self, scale) end
-    local hw = self:NormalizeHorizontalSize(self:GetWidth() * 0.5 / scale)
-    local hh = self:NormalizeVerticalSize(self:GetHeight() * 0.5 / scale)
-    local k = wide and 2 or 2 * SLACK
-    local minX, maxX = range(hw, hw * k)
-    local minY, maxY = range(hh, hh * k)
-    local x, y = self.currentScrollX, self.currentScrollY
-    if x and y then minX, maxX, minY, maxY = math.min(minX, x), math.max(maxX, x), math.min(minY, y), math.max(maxY, y) end
+    local minX, maxX = range(self:NormalizeHorizontalSize(self:GetWidth() * 0.5 / scale))
+    local minY, maxY = range(self:NormalizeVerticalSize(self:GetHeight() * 0.5 / scale))
     return minX, maxX, minY, maxY
   end
 end
-
-wideView = function(u, v, zoom)
-  wide = true
-  local ok, err = pcall(showAt, u, v, zoom)
-  wide = false
-  if not ok then error(err, 0) end
-end
+wideView = showAt
 
 local hookHighlight -- below
 local function attach()
@@ -465,7 +456,7 @@ local function onCreateZoomLevels(self)
   if w and not w.deepest then
     local most = 1
     for _, cont in ipairs(w.conts) do most = math.max(most, 1 / (cont.r - cont.l)) end
-    w.deepest = most * ZOOM_STEP
+    w.deepest = most * ZOOM_STEP ^ 3 -- (room to zoom on till the view is on the continent, off its middle)
   end
   c = c or w
   if not c.deepest then
