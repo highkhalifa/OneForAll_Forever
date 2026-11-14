@@ -3259,15 +3259,8 @@ on("questXP", updateXP)
 on("questXPTracked", updateXP)
 on("classColors", refreshClassColors)
 on("classBright", refreshClassColors)
-do -- (the seamless map shows the unexplored parts by the same switch and slider; own block: 200 locals)
-  local function fogChanged()
-    if FLT.RefreshMapFog then FLT.RefreshMapFog() end
-    if FLT.SeamlessMap then FLT.SafeCall("SeamlessMap", FLT.SeamlessMap.RefreshFog) end
-  end
-  on("mapFog", fogChanged)
-  on("mapFogAlpha", fogChanged)
-end
-on("seamlessMap", function() if FLT.SeamlessMap then FLT.SafeCall("SeamlessMap", FLT.SeamlessMap.Refresh) end end)
+on("mapFog", function() if FLT.RefreshMapFog then FLT.RefreshMapFog() end end)
+on("mapFogAlpha", function() if FLT.RefreshMapFog then FLT.RefreshMapFog() end end)
 on("durability", function() warnedDurability = false; checkDurability() end)
 
 -- Alt+right-click on an item in the bags: on / off the junk list (only while "Sell junk" is on). Bag buttons
