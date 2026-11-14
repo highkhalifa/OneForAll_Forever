@@ -400,8 +400,6 @@ SlashCmdList.ONEFORALL = function(cmd)
     msg(L["Caught errors cleared."])
   elseif cmd == "bug" then
     if FLT.UI and FLT.UI.ShowBugReport then FLT.UI.ShowBugReport() end
-  elseif cmd == "mapdebug" then -- temporary (map zooming in and out by itself): prints who changes the map's zoom / size
-    FLT.MapDebug()
   elseif cmd == "rolltest" then
     if FLT.GearMarks then FLT.GearMarks.RollTest() end
   elseif cmd == "questtest" then
@@ -466,47 +464,5 @@ SlashCmdList.ONEFORALL = function(cmd)
     msg(string.format("Profession data: standalone and embedded. %d/%d Merchant's Favor recipes have built-in result mappings.", resolved, total))
   else
     if FLT.ToggleUI then FLT:ToggleUI() end
-  end
-end
-
--- /ofa mapdebug (temporary): the world map zoomed in and out a little by itself after M (user 14.11.). Prints every
--- zoom / size change of the map with the code that caused it, at most 40 lines, so the cause can be found.
-do
-  local on, hooked, lines = false, false, 0
-  local function where()
-    local st = debugstack and debugstack(3, 5, 0) or ""
-    return (st:gsub("\n", " | "):gsub("Interface[/\\]AddOns[/\\]", ""):sub(1, 300))
-  end
-  local function out(what)
-    if not on or lines >= 40 then return end
-    lines = lines + 1
-    msg(string.format("mapdebug %.2f %s  <- %s", GetTime(), what, where()))
-  end
-  function FLT.MapDebug()
-    on = not on; lines = 0
-    msg("mapdebug " .. (on and "on: open the map (M) and wait for the zooming, then copy the lines" or "off"))
-    if not on or hooked or not WorldMapFrame then return end
-    hooked = true
-    local sc = WorldMapFrame.ScrollContainer
-    for _, f in ipairs({ WorldMapFrame, sc }) do
-      if f and f.HookScript then
-        f:HookScript("OnSizeChanged", function(self, w, h)
-          out(string.format("size %s %.1f x %.1f", self == WorldMapFrame and "map" or "scroll", w or 0, h or 0))
-        end)
-      end
-    end
-    if sc then
-      for _, m in ipairs({ "SetZoomTarget", "ZoomIn", "ZoomOut", "ResetZoom", "InstantPanAndZoom", "SetPanTarget",
-        "OnMouseWheel", "SetCanvasScale", "CalculateScaleExtents", "OnCanvasSizeChanged" }) do
-        if type(sc[m]) == "function" then
-          hooksecurefunc(sc, m, function(_, a, b) out(m .. " " .. tostring(a) .. " " .. tostring(b)) end)
-        end
-      end
-    end
-    if WorldMapFrame.OnCanvasScaleChanged then
-      hooksecurefunc(WorldMapFrame, "OnCanvasScaleChanged", function()
-        out("scale " .. tostring(sc and sc.GetCanvasScale and sc:GetCanvasScale()))
-      end)
-    end
   end
 end
