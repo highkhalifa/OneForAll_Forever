@@ -2,8 +2,9 @@ local _, FLT = ...
 
 -- Quality of Life > World Map > Seamless map ("seamlessMap", 6.2.9, off by default): the continent map with
 -- every zone's map drawn on it in full detail, zoomed smoothly with the mouse wheel toward the cursor and moved
--- by dragging. Clicks no longer go into a zone or out of it: a zone map the game opens shows as the continent,
--- framed on that zone. The world map zooms the same way: once the continent being zoomed into fills the view the
+-- by dragging. A left-click glides into the zone under the cursor (on the world map: the continent), a right-click
+-- out to the whole continent, and from there to the world (test5, user 14.11.: keep the clicks). A zone map the game
+-- opens shows as the continent, framed on that zone. The world map zooms the same way: once the continent being zoomed into fills the view the
 -- map hands over to it at the same place and size, and out of a continent back to the world (6.2.9-test4, user
 -- 14.11.: the jump between them was not seamless).
 --
@@ -19,6 +20,7 @@ FLT.SeamlessMap = SM
 
 local ZOOM_STEP = 1.25        -- each wheel notch
 local ZOOM_RATE = 14          -- the wheel zoom's approach, per second (in log zoom)
+local GLIDE_TIME = 0.4        -- a click's glide, seconds
 local DETAIL_FROM, DETAIL_FULL = 1.15, 1.9 -- zoom (1 = the continent fits) where the zones' detail fades in
 local DEEPEST = 2             -- the deepest zoom: this many screen px per zone map px
 local CULL_MARGIN = 0.15      -- zones this far (view sizes) outside the view still shown
@@ -368,11 +370,50 @@ local function outToWorld(a)
   return true
 end
 
+-- the zoom at which a rectangle (0..1 on this map) just fits the view
+local function fitZoomOf(l, r, t, b)
+  local W, H = canvasSize()
+  return math.min(sc:GetWidth() / ((r - l) * W), sc:GetHeight() / ((b - t) * H)) / fitScale()
+end
+-- the zone of a continent at (u, v): the smallest whose rectangle holds it
+local function zoneAt(c, u, v)
+  local best, area
+  for _, z in ipairs(c.zones) do
+    if u >= z.l and u <= z.r and v >= z.t and v <= z.b then
+      local a = (z.r - z.l) * (z.b - z.t)
+      if not best or a < area then best, area = z, a end
+    end
+  end
+  return best
+end
+-- a click's glide from the view to (u, v) at `zoom`, as one zoom about a fixed point (OpenMap's GlideTo);
+-- `after` runs when it arrives
+local function glideTo(u, v, zoom, after)
+  local u0, v0, z0 = view()
+  anchor = nil
+  anim = { mode = "glide", u0 = u0, v0 = v0, z0 = z0, u1 = u, v1 = v, z1 = clamp(zoom, 1, deepestZoom()), t = 0, after = after }
+end
+local function glide(a, elapsed)
+  local info = sc.mouseButtonInfo and sc.mouseButtonInfo.LeftButton
+  if info and info.down then anim = nil; return end -- grabbed: the glide stops where it is
+  a.t = math.min(1, a.t + elapsed / GLIDE_TIME)
+  local e = a.t * a.t * (3 - 2 * a.t)
+  local zoom = math.exp(math.log(a.z0) + (math.log(a.z1) - math.log(a.z0)) * e)
+  -- the centre moves with 1/zoom, which is what zooming about one fixed point looks like
+  local w = math.abs(a.z1 - a.z0) < 1e-6 and e or (1 / a.z0 - 1 / zoom) / (1 / a.z0 - 1 / a.z1)
+  wideView(a.u0 + (a.u1 - a.u0) * w, a.v0 + (a.v1 - a.v0) * w, zoom)
+  if a.t >= 1 then
+    anim = nil
+    if a.after then a.after() end
+  end
+end
+
 -- after Blizzard's own OnUpdate, so its panning never adds to ours
 local function animate(_, elapsed)
   local a = anim
   if not a then return end
   if not active then anim = nil; return end
+  if a.mode == "glide" then return glide(a, elapsed) end
   local _, _, z = view()
   local zoom = math.exp(math.log(z) + (math.log(a.target) - math.log(z)) * (1 - math.exp(-elapsed * ZOOM_RATE)))
   local done = math.abs(math.log(a.target / zoom)) < 0.003
@@ -522,8 +563,48 @@ end
 
 -- clicks on the stitched map do nothing (no zone in, no map out); a drag still moves the map
 local function onCanvasClick(_, button)
-  if not active then return false end
-  return button == "LeftButton" or button == "RightButton"
+  if not active or (button ~= "LeftButton" and button ~= "RightButton") then return false end
+  local u, v, zoom = view()
+  local sx, sy = cursorOffset()
+  local pu, pv = perPx(zoom)
+  local cu, cv = u + sx * pu, v + sy * pv
+  local id = map:GetMapID()
+  local c = continent(id)
+  if button == "LeftButton" then
+    if c then
+      -- into the zone under the cursor
+      local z = zoneAt(c, cu, cv)
+      local fit = z and fitZoomOf(z.l, z.r, z.t, z.b) * 0.95
+      if fit and fit > zoom * 1.05 then glideTo((z.l + z.r) / 2, (z.t + z.b) / 2, fit) end
+    else
+      -- the world: into the continent under the cursor, handed over to it where it fills the view
+      local w = worldOf(id)
+      local ct = w and continentAt(w, cu, cv)
+      if ct and not inCombat() then
+        local k, kv = ct.r - ct.l, ct.b - ct.t
+        glideTo((ct.l + ct.r) / 2, (ct.t + ct.b) / 2, 1 / k, function()
+          local x, y, zw = view()
+          handOver(ct.mapID, { sx = 0, sy = 0 }, (x - ct.l) / k, (y - ct.t) / kv, zw * k, 0.5, 0.5, zw * k)
+        end)
+      end
+    end
+  elseif c and zoom > 1.01 then
+    glideTo(0.5, 0.5, 1) -- out to the whole continent
+  elseif c then
+    -- the whole continent: handed over to the world, then out to the whole world
+    local w, ct = worldAbove(id)
+    if w and not inCombat() then
+      local k, kv = ct.r - ct.l, ct.b - ct.t
+      map:SetMapID(w.mapID)
+      if active then
+        wideView(ct.l + u * k, ct.t + v * kv, zoom / k)
+        glideTo(0.5, 0.5, 1)
+      end
+    end
+  elseif zoom > 1.01 then
+    glideTo(0.5, 0.5, 1) -- the whole world
+  end
+  return true
 end
 
 -- Blizzard's zone highlight under the cursor is the continent's low detail art: away once the zones show
