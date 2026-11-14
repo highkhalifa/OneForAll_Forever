@@ -7,7 +7,7 @@ local _, FLT = ...
 -- open it.
 --
 -- What is drawn: Blizzard's continent art (the map's own), and over it each zone's map pieces (Data/MapOverlays.lua,
--- the same pieces as Remove Fog) placed by C_Map.GetMapRectOnMap. Each zone's base map is a rectangle that also
+-- the same pieces as Remove Fog) placed by C_Map.GetMapRectOnMap: the explored ones, the others only with Remove Fog. Each zone's base map is a rectangle that also
 -- paints parchment over its neighbours, so it is left out (the continent's art shows between the pieces).
 --
 -- The zoom (an animation that keeps the point under the cursor in place, a drag mid-zoom carrying it) is adapted
@@ -130,6 +130,7 @@ local function buildZone(z)
   local fx, fy = (z.r - z.l) * W / lw, (z.b - z.t) * H / lh -- canvas px per zone map px
   local ox, oy = z.l * W, z.t * H
   local TW, TH = L.tileWidth or 256, L.tileHeight or 256
+  z.pieces = {}
   local function tile(frame, layer, id, x, y, pw, ph, fw, fh)
     local t = frame:CreateTexture(nil, layer)
     t:SetTexture(id, nil, nil, "TRILINEAR")
@@ -152,8 +153,11 @@ local function buildZone(z)
       end
     end
   end
-  -- the pieces, tiled as the game tiles its explored ones (UI/MapFog.lua)
+  -- the pieces, tiled as the game tiles its explored ones (UI/MapFog.lua); each keyed by its offset like the
+  -- game's explored ones, so it shows or hides with the exploration (applyFog)
   for _, o in ipairs(overlaysOf(z.artID)) do
+    local piece = { key = o.x .. "," .. o.y, tex = {} }
+    z.pieces[#z.pieces + 1] = piece
     local wide, tall = math.ceil(o.w / TW), math.ceil(o.h / TH)
     for j = 1, tall do
       local ph, fh = TH, TH
@@ -162,8 +166,26 @@ local function buildZone(z)
         local pw, fw = TW, TW
         if k == wide then pw = o.w % TW; if pw == 0 then pw = TW end; fw = fileSize(pw) end
         local id = o.ids[(j - 1) * wide + k]
-        if id then tile(pieceFrame, "ARTWORK", id, o.x + TW * (k - 1), o.y + TH * (j - 1), pw, ph, fw, fh) end
+        if id then piece.tex[#piece.tex + 1] = tile(pieceFrame, "ARTWORK", id, o.x + TW * (k - 1), o.y + TH * (j - 1), pw, ph, fw, fh) end
       end
+    end
+  end
+end
+
+-- Unexplored parts as on the zone maps: only with Remove Fog ("mapFog"), as visible as its slider says
+-- ("mapFogAlpha"); explored ones always. The explored list is asked once per zone until it changes.
+local function applyFog(z)
+  if not z.explored then
+    z.explored = {}
+    local got = C_MapExplorationInfo and C_MapExplorationInfo.GetExploredMapTextures
+      and C_MapExplorationInfo.GetExploredMapTextures(z.mapID)
+    for _, e in ipairs(got or {}) do z.explored[e.offsetX .. "," .. e.offsetY] = true end
+  end
+  local fog = FLT.QoL.Get("mapFog") and (tonumber(FLT.QoL.Get("mapFogAlpha")) or 100) / 100 or 0
+  for _, p in ipairs(z.pieces) do
+    local a = z.explored[p.key] and 1 or fog
+    for _, t in ipairs(p.tex) do
+      if a > 0 then t:SetAlpha(a); t:Show() else t:Hide() end
     end
   end
 end
@@ -178,6 +200,7 @@ local function showZone(z)
   buildZone(z)
   z.shown = true
   for _, t in ipairs(z.tex) do t:Show() end
+  applyFog(z) -- (hides the pieces that stay hidden)
 end
 
 local function forgetZones()
@@ -454,6 +477,18 @@ function SM.Refresh()
   sc:ResetZoom()
 end
 
+-- Remove Fog or its slider changed (QoL.lua), or you explored somewhere (below): the zones shown again
+function SM.RefreshFog(explored)
+  for _, c in pairs(continents) do
+    if c then
+      for _, z in ipairs(c.zones) do
+        if explored then z.explored = nil end
+        if z.shown then applyFog(z) end
+      end
+    end
+  end
+end
+
 -- /ofa seamlessbase: the zones' base maps on or off, to compare the look (test builds)
 function SM.ToggleBase()
   showBase = not showBase
@@ -464,7 +499,12 @@ end
 
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
-f:SetScript("OnEvent", function(self)
-  self:UnregisterAllEvents()
+f:SetScript("OnEvent", function(self, event)
+  if event == "MAP_EXPLORATION_UPDATED" then
+    FLT.SafeCall("SeamlessMap", SM.RefreshFog, true)
+    return
+  end
+  self:UnregisterEvent("PLAYER_LOGIN")
+  self:RegisterEvent("MAP_EXPLORATION_UPDATED")
   FLT.SafeCall("SeamlessMap", setup)
 end)

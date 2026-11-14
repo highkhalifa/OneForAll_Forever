@@ -3229,8 +3229,14 @@ on("questXP", updateXP)
 on("questXPTracked", updateXP)
 on("classColors", refreshClassColors)
 on("classBright", refreshClassColors)
-on("mapFog", function() if FLT.RefreshMapFog then FLT.RefreshMapFog() end end)
-on("mapFogAlpha", function() if FLT.RefreshMapFog then FLT.RefreshMapFog() end end)
+do -- (the seamless map shows the unexplored parts by the same switch and slider; own block: 200 locals)
+  local function fogChanged()
+    if FLT.RefreshMapFog then FLT.RefreshMapFog() end
+    if FLT.SeamlessMap then FLT.SafeCall("SeamlessMap", FLT.SeamlessMap.RefreshFog) end
+  end
+  on("mapFog", fogChanged)
+  on("mapFogAlpha", fogChanged)
+end
 on("seamlessMap", function() if FLT.SeamlessMap then FLT.SafeCall("SeamlessMap", FLT.SeamlessMap.Refresh) end end)
 on("durability", function() warnedDurability = false; checkDurability() end)
 
