@@ -22,7 +22,9 @@ local worn = {}    -- [slot] = value of the worn item (false = empty)
 local speeds = {}  -- [itemID] = weapon speed (tooltip data)
 local classOK = {} -- [itemID] = false when the item has "Classes: ..." without the player's class
 local gearSum      -- Value of everything worn (6.2.5: the % is against the whole gear); nil = count again
-local function resetWorn() wipe(worn); gearSum = nil end
+-- GV.gen goes up whenever a Value can change (gear, weights, spec, level); the Gear Planner keeps its results until then
+-- (6.2.10-beta2: "All slots" judged thousands of items on every redraw)
+local function resetWorn() wipe(worn); gearSum = nil; GV.gen = (GV.gen or 0) + 1 end
 
 local function curveAt(curve, level)
   local n = #curve
@@ -531,6 +533,6 @@ local ev = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_LEVEL_UP", "PLAYER_TALENT_UPDATE", "CHARACTER_POINTS_CHANGED", "TRAIT_CONFIG_UPDATED",
   "ACTIVE_TALENT_GROUP_CHANGED", "PLAYER_EQUIPMENT_CHANGED" }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript("OnEvent", function(_, event)
-  if event == "PLAYER_EQUIPMENT_CHANGED" then resetWorn(); setWorn = nil else W = nil end
+  if event == "PLAYER_EQUIPMENT_CHANGED" then resetWorn(); setWorn = nil else W = nil; GV.gen = (GV.gen or 0) + 1 end
 end)
 GV._reset = function() W = nil; setWorn = nil; wipe(values); resetWorn(); wipe(speeds); wipe(classOK) end -- tests

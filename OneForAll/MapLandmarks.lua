@@ -121,6 +121,9 @@ local function onClick(pin)
     return
   end
   if e and e.to then -- zone transition: show the other zone
+    -- not with a controller (6.2.10, Discord carldini 14.11.): switching the map from our code tainted it, and closing /
+    -- opening it again hit "blocked from an action only available to the Blizzard UI" in the pad controls
+    if FLT.PadActive and FLT.PadActive() then return end
     if WorldMapFrame and WorldMapFrame.SetMapID then WorldMapFrame:SetMapID(e.to) end
     return
   end

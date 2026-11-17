@@ -10,7 +10,7 @@ local _, FLT = ...
 -- 08.11.2026): new recipes the client knows, skill colours, reagents, recipe items; rw=true levels can come from there.
 FLT.PROFESSION_RECIPES = FLT.PROFESSION_RECIPES or {}
 FLT.PROFESSION_RECIPES["First Aid"] = {
-  {s=1230117, i=279968, n="First Aid Kit", q=1, cat="Camping", y=20, g=22, gr=25, r={{1251,3,"Linen Bandage"}, {159,1,"Refreshing Spring Water"}}},
+  {s=1230117, i=279968, n="First Aid Kit", q=1, cat="Camping", y=20, g=20, gr=20, r={{1251,3,"Linen Bandage"}, {159,1,"Refreshing Spring Water"}}},
   {s=3275, i=1251, n="Linen Bandage", q=1, cat="Bandages", req=1, y=30, g=45, gr=60, r={{2589,1,"Linen Cloth"}}, start=true},
   {s=3276, i=2581, n="Heavy Linen Bandage", q=1, cat="Bandages", req=40, rw=true, y=50, g=75, gr=100, r={{2589,2,"Linen Cloth"}}},
   {s=1244431, i=118, n="Minor Healing Potion", q=1, cat="Healing Potions", req=1, rw=true, y=55, g=75, gr=95, r={{3371,1,"Empty Vial"}, {2678,1,"Mild Spices"}, {2447,1,"Peacebloom"}}},
@@ -27,7 +27,7 @@ FLT.PROFESSION_RECIPES["First Aid"] = {
   {s=18630, i=14530, n="Heavy Runecloth Bandage", q=1, cat="Bandages", req=290, rw=true, y=290, g=320, gr=350, r={{14047,2,"Runecloth"}}},
   {s=30021, i=23684, n="Crystal Infused Bandage", c=4, q=1, cat="Bandages", req=285, rw=true, y=300, g=330, gr=360, r={{23567,1,"DEPRECATED ITEM"}, {14047,10,"Runecloth"}}},
   {s=7935, i=6453, n="Strong Anti-Venom", c=3, q=1, cat="Curatives", req=130, y=130, g=165, gr=200, r={{1288,1,"Large Venom Sac"}}, ri=6454, rn="Manual: Strong Anti-Venom", src={d={{3, "Flesh Eater", "Duskwood", 1431, 25.1, 38.2}, {48, "Skeletal Warrior", "Duskwood", 1431, 77.4, 73.8}, {202, "Skeletal Horror", "Duskwood", 1431, 79.7, 61.9}, {203, "Skeletal Mage", "Duskwood", 1431, 78.2, 75.6}, {205, "Nightbane Dark Runner", "Duskwood", 1431, 65.4, 67.8}}, dn=420}},
-  {s=1262996, i=279940, n="Toxin Study", q=1, cat="Camping", req=140, y=140, g=142, gr=145, r={{6452,1,"Anti-Venom"}, {8544,2,"Mageweave Bandage"}, {4470,2,"Simple Wood"}}, ri=273105, rn="Blueprint: Toxin Study", src={d={{4278, "Commander Springvale", "Shadowfang Keep"}}, dn=1}},
+  {s=1262996, i=279940, n="Toxin Study", q=1, cat="Camping", req=140, y=140, g=140, gr=140, r={{6452,1,"Anti-Venom"}, {8544,2,"Mageweave Bandage"}, {4470,2,"Simple Wood"}}, ri=273105, rn="Blueprint: Toxin Study", src={d={{4278, "Commander Springvale", "Shadowfang Keep"}}, dn=1}},
   {s=1259343, i=255717, n="Clever Poultice", c=3, q=1, cat="Curatives", req=140, y=160, g=190, gr=220, r={{1468,1,"Murloc Fin"}, {3713,1,"Soothing Spices"}, {2686,1,"Thunder Ale"}}, ri=255724, rn="Manual: Clever Poultice", src={d={{910, "Defias Enchanter", "Duskwood", 1431, 48.8, 77.5}}, dn=1}},
   {s=1244434, i=1710, n="Greater Healing Potion", q=1, lv=21, cat="Healing Potions", req=155, y=175, g=195, gr=215, r={{3372,1,"Leaded Vial"}, {2692,3,"Hot Spices"}, {3357,1,"Liferoot"}}, ri=255723, rn="Manual: Greater Healing Potion", src={d={{2589, "Syndicate Mercenary", "Arathi Highlands", 1417, 30.9, 26.2}}, dn=1}},
   {s=7929, i=6451, n="Heavy Silk Bandage", q=1, cat="Bandages", req=180, y=180, g=210, gr=240, r={{4306,2,"Silk Cloth"}}, ri=16112, rn="Manual: Heavy Silk Bandage", src={v={{2805, "Deneb Walker", "Arathi Highlands", 1417, 27.0, 58.8, fac="A"}, {13476, "Balai Lok'Wein", "Dustwallow Marsh", 1445, 36.5, 30.4, fac="H"}}}},

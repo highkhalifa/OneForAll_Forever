@@ -1146,9 +1146,10 @@ local function createArmoryPanel(parent)
   end
 
   -- Item names and ownership arrive later: redraw (throttled) while visible.
-  local pending, gearChanged = false, false
+  local pending, gearChanged, lastRedraw = false, false, 0
   local function redraw()
     pending = false
+    lastRedraw = GetTime and GetTime() or 0
     local changed = gearChanged; gearChanged = false
     if not panel:IsVisible() then return end
     if current == "rep" then refreshRep(true) elseif current == "quests" then questView:Refresh(true) elseif current == "gear" then gear:Refresh(changed) elseif current then refreshSets(true) end
@@ -1162,12 +1163,21 @@ local function createArmoryPanel(parent)
   ev:RegisterEvent("QUEST_TURNED_IN") -- the checks of the special quests
   ev:RegisterEvent("QUEST_ACCEPTED") -- 6.2.8: their "In log" state (debounced, only while the panel is shown)
   pcall(ev.RegisterEvent, ev, "QUEST_REMOVED")
-  ev:SetScript("OnEvent", function(_, event, _, success)
+  ev:SetScript("OnEvent", function(_, event, id, success)
     if event == "PLAYER_EQUIPMENT_CHANGED" then gearChanged = true end
-    if event == "ITEM_DATA_LOAD_RESULT" and not success then return end -- a failed load: no redraw (it would ask again)
+    -- a failed load: no redraw (it would ask again). 6.2.10 (user 15.11., video: "All slots" lagged without end): the
+    -- same for GET_ITEM_INFO_RECEIVED - items the server does not know failed, the redraw asked for them again, and so
+    -- on forever. The Gear Planner leaves those items out (FLT.ItemLoadFailed).
+    if (event == "ITEM_DATA_LOAD_RESULT" or event == "GET_ITEM_INFO_RECEIVED") and success == false then
+      if id then FLT.ItemLoadFailed = FLT.ItemLoadFailed or {}; FLT.ItemLoadFailed[id] = true end
+      return
+    end
     if pending or not panel:IsVisible() then return end
     pending = true
-    if C_Timer and C_Timer.After then C_Timer.After(0.4, function() FLT.SafeCall("Armory", redraw) end) else redraw() end
+    -- while many items arrive the redraws come at most every 1.5 s (each one goes through the whole list)
+    local now = GetTime and GetTime() or 0
+    local wait = math.max(0.4, 1.5 - (now - lastRedraw))
+    if C_Timer and C_Timer.After then C_Timer.After(wait, function() FLT.SafeCall("Armory", redraw) end) else redraw() end
   end)
   panel.Refresh = function() if panel:IsVisible() and current then show(current) end end
 

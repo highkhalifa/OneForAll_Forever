@@ -27,8 +27,7 @@ FLT.FAVOR_GUIDE = {
 }
 
 -- Library Book reward quests (Wowhead Forever, 2 October 2026).
--- Each tier is a separate quest at the librarian; the book count for the
--- third tier is not confirmed yet.
+-- Each tier is a separate quest at the librarian; the third tier is at 25 books (since 6.2.6-beta40, Discord Kharo / Wowhead).
 FLT.BOOK_REWARD_TIERS = {
   {books="10 books", quest="Friend of the Library", questID=78150, req=1,
    items={{277203,"Scholarly Pendant",2,"Neck - +3 Stamina, +2 Spirit"},{277204,"Erudite's Amulet",2,"Neck - +2 Agility, +3 Stamina"}}},

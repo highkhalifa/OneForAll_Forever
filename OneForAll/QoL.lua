@@ -376,14 +376,30 @@ local function questProgress()
   if takesMarks() then msg(L["Not turned in automatically: this quest takes your battleground marks."]); return end
   CompleteQuest()
 end
+-- 6.2.10-beta16 (Discord thunderous_one 16.11.: a quest with two reward choices handed out the cloth head by itself after
+-- the player came back to the NPC): reward choices were already left alone (n > 1), but a count read too early (0) would
+-- have turned the quest in with GetQuestReward(0). Now the turn-in waits a moment, reads the count again, asks the quest
+-- log too (its reward data is there since the quest was accepted) and gives up on any doubt.
+function QoL.ChoicesInLog(id)
+  if not (id and id > 0 and GetNumQuestLogChoices) then return 0 end
+  local ok, n = pcall(GetNumQuestLogChoices, id, true)
+  return ok and tonumber(n) or 0
+end
 local function questComplete()
   if not QoL.Get("autoTurnIn") or paused() or not GetQuestReward then return end
   local n = GetNumQuestChoices and GetNumQuestChoices() or 0
-  if n <= 1 then
-    local title = GetTitleText and GetTitleText()
+  local id = GetQuestID and GetQuestID() or 0
+  if n > 1 or QoL.ChoicesInLog(id) > 1 then return end -- reward choices stay manual
+  local title = GetTitleText and GetTitleText()
+  local function turnIn()
+    if paused() or not (QuestFrame and QuestFrame:IsShown()) then return end
+    if (GetTitleText and GetTitleText()) ~= title or (GetQuestID and GetQuestID() or 0) ~= id then return end
+    local now = GetNumQuestChoices and GetNumQuestChoices() or 0
+    if now ~= n or now > 1 or QoL.ChoicesInLog(id) > 1 then return end
     if title and GetTime then QoL.recentTurnIn[title] = GetTime() end
-    GetQuestReward(n)
-  end -- reward choices stay manual
+    GetQuestReward(now)
+  end
+  if C_Timer and C_Timer.After then C_Timer.After(0.3, turnIn) else turnIn() end
 end
 -- repeatable quests are left alone (6.2.5, Discord kersey 11.11.: Mangletooth's repeatable Blood Shard quests were turned
 -- in again and again, the other quests never). Gossip and the available list say "repeatable"; for the active list of a
@@ -1531,6 +1547,7 @@ local MOVABLE = {
   "SettingsPanel", "HelpFrame", "GameMenuFrame", -- Options, Customer Support, Game Menu (user 02.11.)
   "SocialUIFrame", "CalendarFrame", "CatalogShopFrame", -- Social (Friends), Calendar, Shop (Discord Stiandresius 06.11.)
   "LegacySystemFrame", -- Forever's Legacy System (user 09.11.)
+  "CooldownViewerSettings", -- Cooldown Settings (6.2.10, Discord sumomo8681 15.11.)
 }
 -- windows whose pages cover them completely: the pages take the mouse, so they are grips as well
 local GRIPS = { LFGParentFrame = { "LFGWhoListFrame", "LFGListingFrame", "LFGBrowseFrame" } }
@@ -1675,7 +1692,17 @@ local function makeMovable(name)
   for i = 1, #handles do
     local h = handles[i]
     if type(h) == "table" and h.HookScript then
-      if h ~= f and h.EnableMouse then h:EnableMouse(true) end
+      if h ~= f and h.EnableMouse then
+        h:EnableMouse(true)
+        -- 6.2.9 (Discord Nigel 14.11.: Leatrix Plus' Wowhead link at the top of the map could no longer be copied): the
+        -- title bar now takes the mouse, so hovering stays on it and never reaches what other addons put beneath it.
+        -- Passing the hover on lets their text boxes get the mouse again; clicks (dragging) stay with the title bar.
+        -- 6.2.10 (Discord fightincowboy 15.11.): only on the world map, where Leatrix' link is - on every window it was
+        -- blocked when a window loaded during a protected action (Inspect from the player menu) and the chat menu broke
+        if name == "WorldMapFrame" and h.SetPropagateMouseMotion and not (h.IsProtected and h:IsProtected()) then
+          pcall(h.SetPropagateMouseMotion, h, true)
+        end
+      end
       h:HookScript("OnMouseDown", down); h:HookScript("OnMouseUp", up)
     end
   end
@@ -1693,6 +1720,8 @@ local function makeMovable(name)
     applyScale(self, name); applyPos(self, name)
     if C_Timer and C_Timer.After then C_Timer.After(0, function() applyScale(self, name); applyPos(self, name) end) end
   end)
+  -- set up a moment after its addon loaded (ADDON_LOADED below): the window may already be open
+  if f:IsShown() then applyScale(f, name); applyPos(f, name) end
 end
 local function setupMovable()
   if not QoL.Get("moveWindows") and not QoL.Get("resizeWindows") then return end
@@ -2148,6 +2177,9 @@ local function addTargetLine(tt)
   if not QoL.Get("unitTarget") or not tt or not tt.GetUnit then return end
   local _, unit = tt:GetUnit()
   if not unit then return end
+  -- 6.2.10 (Discord darkgameover / olgi 15.11.: tooltips of units in the world stayed 2 s and longer): the game refreshes
+  -- the tooltip while it fades out after the mouse left the unit - our Show() below stopped the fade every time
+  if UnitExists and not UnitExists("mouseover") then return end
   local tu = unit .. "target"
   if not (UnitExists and UnitExists(tu)) then return end
   local name = UnitName(tu)
@@ -2885,6 +2917,15 @@ local function helperFrame()
   local f = CreateFrame("Frame", "OneForAllBagsFull", UIParent)
   f:SetSize(W, 172); f:SetFrameStrata("FULLSCREEN_DIALOG"); f:EnableMouse(true)
   f:SetClampedToScreen(true) -- next to a loot window at the right edge it was cut off (user 06.11. video)
+  -- 6.2.10 (Discord scylon77 15.11.): drag it anywhere (the place is kept, qol.bagsFullPos), Esc closes it
+  f:SetMovable(true); f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", f.StartMoving)
+  f:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local x, y, d = self:GetLeft(), self:GetTop(), db()
+    if x and y and d then d.bagsFullPos = { math.floor(x + 0.5), math.floor(y + 0.5) } end
+  end)
+  if UISpecialFrames then table.insert(UISpecialFrames, "OneForAllBagsFull") end
   f.left, f.ti, f.cands, f.ci = {}, 1, {}, 1
   UI.FramedPanel(f)
   -- header: alert icon, title, subtitle, close
@@ -3011,7 +3052,9 @@ function QoL.CheckBagsFull(force, fromError)
   end
   f:Paint()
   f:ClearAllPoints()
-  if type(LootFrame) == "table" and LootFrame:IsShown() then f:SetPoint("TOPLEFT", LootFrame, "TOPRIGHT", 6, 0)
+  local pos = db() and db().bagsFullPos
+  if type(pos) == "table" and pos[1] then f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos[1], pos[2])
+  elseif type(LootFrame) == "table" and LootFrame:IsShown() then f:SetPoint("TOPLEFT", LootFrame, "TOPRIGHT", 6, 0)
   else f:SetPoint("CENTER", UIParent, "CENTER", 0, 120) end
   f:Show()
 end
@@ -3035,6 +3078,8 @@ end
 local function lootError(_, message)
   if not QoL.Get("bagsFull") then return end
   if message == ERR_INV_FULL or message == ERR_LOOT_NO_SPACE or message == "Inventory is full." then
+    -- a Soul Shard from Drain Soul with full bags (6.2.10, Discord elipz 15.11.): no helper - only loot counts then
+    if QoL._drainAt and GetTime() - QoL._drainAt < 16 and not (GetNumLootItems and (GetNumLootItems() or 0) > 0) then return end
     if C_Timer and C_Timer.After then C_Timer.After(0.1, function() QoL.CheckBagsFull(false, true) end) else QoL.CheckBagsFull(false, true) end
   end
 end
@@ -3107,11 +3152,15 @@ local function applySparkles()
 end
 local function sparkleSwitch(on)
   if on then applySparkles(); return end
-  local d = db(); if not d or not d.sparkleOrig then return end
+  local d = db(); if not d then return end
+  if not d.sparkleOrig and GetCVar and GetCVar("outlineModeShowLootEffectWhenDisabled") ~= "1" then return end -- already off
   if inCombat() then msg(L["This can be changed after combat."]); return end
+  d.sparkleOrig = d.sparkleOrig or {}
   SPK.outlineBack(d)
-  for k, v in pairs(d.sparkleOrig) do pcall(SetCVar, k, v) end
   d.sparkleOrig = nil
+  -- back to the game's default "0", not to a saved value (6.2.10, Discord locksmite 16.11.: NPCs kept glowing - a saved
+  -- "1" from earlier versions came back; players needed /console outlineModeShowLootEffectWhenDisabled 0)
+  for k in pairs(SPK.cvars) do pcall(SetCVar, k, "0") end
   msg(L["Quest loot sparkles switched off. Restart the game for it to take full effect."])
 end
 local function cvarChanged(name)
@@ -3167,7 +3216,9 @@ local function onEventSafe(_, event, ...)
   elseif event == "PLAYER_LOGOUT" then
     QoL.SnapshotRecipes()
   elseif event == "ADDON_LOADED" then
-    setupMovable()
+    -- a moment later (6.2.10): a window addon can load inside a protected action of the game (Inspect from the player
+    -- menu loads Blizzard_InspectUI) - touching its window right there taints that action
+    if C_Timer and C_Timer.After then C_Timer.After(0, setupMovable) else setupMovable() end
   elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
     lootSeq = lootSeq + 1
     quickLoot()
@@ -3192,7 +3243,12 @@ local function onEventSafe(_, event, ...)
   elseif event == "UNIT_AURA" then playerAura(...); if (...) == "player" then buffAura() end
   elseif event == "MINIMAP_UPDATE_TRACKING" then buffAura()
   elseif event == "WEAPON_ENCHANT_CHANGED" or event == "UNIT_INVENTORY_CHANGED" then buffAura(true)
-  elseif event == "UNIT_SPELLCAST_SUCCEEDED" then QoL.BuffCast(select(3, ...))
+  elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+    local id = select(3, ...)
+    QoL.BuffCast(id)
+    -- Drain Soul started (its name: all ranks, any client language); the bags full helper skips its Soul Shard
+    if QoL._drainName == nil and GetSpellInfo then QoL._drainName = GetSpellInfo(1120) or false end
+    if QoL._drainName and id and GetSpellInfo and GetSpellInfo(id) == QoL._drainName then QoL._drainAt = GetTime() end
   elseif event == "UI_ERROR_MESSAGE" then errorMessage(...)
   elseif event == "LOOT_CLOSED" then
     pendingLoot = nil

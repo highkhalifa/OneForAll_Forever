@@ -88,6 +88,7 @@ local function nearest(list, idx)
   end)
   return best or list[1]
 end
+UI.NearestOf = nearest -- the Crafting List's vendor map button (6.2.10)
 -- the rank a trainer needs to teach a recipe: the highest rank whose required skill is not above the recipe's learn level
 -- (beta14: a Formal White Shirt (135) is taught by Expert trainers, so the map button no longer points at a village trainer)
 local function rankFor(prof, req)

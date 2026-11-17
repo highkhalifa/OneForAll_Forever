@@ -71,6 +71,67 @@ and add the file to OneForAll.toc before UI\MainFrame.lua.
 Changelog (newest first)
 ========================
 
+6.2.10 - New dungeon pictures, armor / weapon type filter, Armory performance and many fixes
+===========================================================================================
+- Turn in quests automatically: safer with reward choices - it waits a moment, checks the number of choices again and
+  in the quest log, and leaves the quest to you on any doubt (Discord).
+- Dungeons & Raids: new dungeon pictures from the game's own loading screens - in the list (full row height, soft edges),
+  in the header and as the colour of the detail background. Scarlet Monastery wings, Upper Blackrock Spire and Dire Maul
+  East / North have their own pictures; the raids too (Barrow Deeps with a new picture, Hyjal Summit with the game's
+  loading screen). The addon got about 20 MB smaller (the old pictures are gone).
+- Dungeons & Raids: boss loot and quest rewards show the green arrow on items that are an upgrade for you (like the
+  bags and the quest window).
+- Gear Planner filter menu: "Armor type" and "Weapon type" are always there and open their own list to the right.
+  Weapon type has One-Hand, Two-Hand and Ranged (a click switches all of them, the mouse on them shows each type) and
+  Shields (Discord).
+- Info bar: the clock shows 12 or 24 hours like the game's clock ("24-hour mode" at the minimap clock).
+- Map Landmarks: the flight masters of the Riverglades are on the map (Discord).
+- Dungeons & Raids: Blackfathom Deeps lists the warlock quest "The Orb of Soran'ruk" too; "A Dynamite Plan" asks for
+  Rough Dynamite, not Coarse Dynamite (Discord).
+- Skill-Up Helper (Alchemy): the Discolored Healing Potions - Lesser at 85, Major at 270; the Minor and Major ones are
+  taught by the Odd Child / Apothecary Renferrel too (Discord).
+- Quest loot sparkles: switching it off sets the game's loot glow back to off, so quest givers stop glowing (after a
+  restart); the option tells that NPCs glow too while it is on (Discord).
+- Move Blizzard windows: the Cooldown Settings window can be moved (Discord).
+- With a controller connected: clicking a zone transition sign on the world map no longer switches the map, and "Open in
+  quest log" only selects the quest (you open the log yourself) - both broke the pad controls until /reload (Discord).
+- Class trainer window (druid): the Bear Form quest is no longer listed again once Dire Bear Form is learned (Discord).
+- Dungeons & Raids: inside Scarlet Monastery the tab opens the wing you are in, not always the Graveyard (English
+  clients; the wing is told by the place name on the minimap; Discord).
+- Tooltips of players, enemies and NPCs in the world fade out at once again when the mouse leaves them - our extra
+  lines (target, NPC quests) kept them up for 2 seconds and more (Discord).
+- Bags full helper: drag it anywhere (the place is kept), Esc closes it, and a Soul Shard from Drain Soul no longer
+  opens it (Discord).
+- Info bar: with the combined bag, Gold and Free bag slots open the bags through the game's backpack button - with a
+  controller the pad controls no longer break until /reload (Discord).
+- Dungeon quests: "Rumi of Gnomeregan: The Collected Works" (a Library Book) is no longer listed under Gnomeregan (Discord).
+- Dungeon quests: Razorfen Downs lists "An Unholy Alliance" once (the Small Scroll step belongs to Razorfen Kraul and is
+  shown in the quest chain).
+- Move Blizzard windows: inspecting a player from the right-click menu no longer breaks right-clicking names and chat
+  links until /reload (since 6.2.9; Discord). Windows that load later are set up a moment after loading, and only the
+  world map passes the mouse hover on to other addons' text under its title bar.
+- Crafting List: adding recipes while the list already has some asks whether to clear it first ("Clear list" / "Keep
+  and add" / Cancel). Profit asks every time; the "+ List" button of a recipe asks once until the list is empty again.
+- Crafting List: materials a vendor sells have a map button to the nearest vendor of your faction who sells them, and a
+  "Send to Auctionator" button puts the missing materials into Auctionator as a shopping list (vendor items left out).
+- Guild members on the world map: dots on top of each other share one tooltip with every name, level and class.
+- Gear Planner: an item's upgrade judgement is kept until your gear, talents or level change, and items the server never
+  answers stop being asked for - fewer spikes with many armor types and "All slots" (Discord).
+- Gear Planner: "All slots" with a wide level range (or "All") no longer lags without end. Items the game does not have
+  yet are loaded in small batches, items the server does not know are left out, and the Armory redraws less often while
+  items arrive (Discord).
+
+6.2.9 - Trainer window, map and Skill-Up fixes
+==============================================
+- Class trainer window: rank 1 of many spells (Swipe, Faerie Fire, Rake, Shred, Thorns ...) was listed at the level and
+  with the fee of the highest rank, and lower ranks seemed to be missing (since 6.2.8; Discord). Every rank keeps its own
+  level and fee again; the fees saved by 6.2.8 are dropped once and read again at the next trainer visit.
+- Move Blizzard windows: other addons' text at the top of the map (Leatrix Plus' Wowhead link) can be hovered and copied
+  again; dragging the map by its title bar still works (Discord).
+- Skill-Up guide: Forever's own recipes are only planned when it is known who teaches them, or a trainer offered them
+  to you. The Discolored Healing Potions point to the Odd Child (Westfall) / Apothecary Renferrel (Silverpine Forest)
+  instead of your alchemy trainer, who does not teach them (Discord).
+
 6.2.8 - Dungeon quest chains and rewards, Brazilian Portuguese
 ==============================================================
 - Dungeon quests: every dungeon quest checked against QuestieDB and Wowhead Forever. 48 missing quest chains and

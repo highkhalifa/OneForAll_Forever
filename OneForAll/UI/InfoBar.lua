@@ -56,12 +56,20 @@ IB.E = E -- (tests)
 local ORDER = {}
 local function add(e) E[e.key] = e; ORDER[#ORDER + 1] = e.key end
 
+-- 12 or 24 hours like the game's clock (its "24-hour mode" setting; 6.2.10, asked 4 times in #help)
+local function clockText(h, m)
+  if not (GetCVarBool and GetCVarBool("timeMgrUseMilitaryTime") == false) then return fmt("%02d:%02d", h, m) end
+  local ap = h >= 12 and (TIMEMANAGER_PM or "PM") or (TIMEMANAGER_AM or "AM")
+  h = h % 12
+  return fmt("%d:%02d %s", h == 0 and 12 or h, m, ap)
+end
+local function localClock() return clockText(tonumber(date("%H")) or 0, tonumber(date("%M")) or 0) end
 add({ key = "clock", label = N"Clock", icon = "Interface\\Icons\\INV_Misc_PocketWatch_01", noIcon = true, tick = true, -- no icon on the bar (user 08.11.)
-  text = function() return date("%H:%M") end,
+  text = localClock,
   tip = function(tt)
-    tt:AddDoubleLine(L["Local time"], date("%H:%M"), 1, 0.82, 0, 1, 1, 1)
+    tt:AddDoubleLine(L["Local time"], localClock(), 1, 0.82, 0, 1, 1, 1)
     local h, m = call(GetGameTime)
-    if h then tt:AddDoubleLine(L["Server time"], fmt("%02d:%02d", h, m), 1, 0.82, 0, 1, 1, 1) end
+    if h then tt:AddDoubleLine(L["Server time"], clockText(h, m), 1, 0.82, 0, 1, 1, 1) end
   end,
   click = function() if TimeManager_Toggle then call(TimeManager_Toggle) end end })
 
@@ -89,6 +97,18 @@ local function saveGold()
   if c == 0 and not moneyEvent and type(old) == "table" and (old[1] or 0) > 0 then return end
   local _, cls = UnitClass("player")
   FLT.CharSave(t, { c, cls }, legacy)
+end
+-- gold / bag slots open the bags: with the combined bag a secure click on the game's backpack button (6.2.10, Discord
+-- kaanu 15.11.: ToggleAllBags from our code tainted the combined bag - with a controller the pad controls broke until
+-- /reload); separate bags keep the ordinary click (the backpack button opens only the backpack there)
+local function bagButton()
+  local on
+  pcall(function()
+    if ContainerFrameSettingsManager and ContainerFrameSettingsManager.IsUsingCombinedBags then
+      on = ContainerFrameSettingsManager:IsUsingCombinedBags()
+    elseif C_CVar and C_CVar.GetCVarBool then on = C_CVar.GetCVarBool("combinedBags") end
+  end)
+  if on then return "MainMenuBarBackpackButton" end
 end
 add({ key = "gold", label = N"Gold", icon = "Interface\\Icons\\INV_Misc_Coin_02", events = { "PLAYER_MONEY" },
   text = function()
@@ -120,7 +140,7 @@ add({ key = "gold", label = N"Gold", icon = "Interface\\Icons\\INV_Misc_Coin_02"
       tt:AddDoubleLine(L["Total"], money(total), 1, 0.82, 0, 1, 1, 1)
     end
   end,
-  click = function() if ToggleAllBags then call(ToggleAllBags) end end })
+  click = function() if ToggleAllBags then call(ToggleAllBags) end end, secureClick = bagButton })
 
 add({ key = "bags", label = N"Free bag slots", icon = "Interface\\Icons\\INV_Misc_Bag_08", events = { "BAG_UPDATE_DELAYED" },
   text = function()
@@ -128,7 +148,7 @@ add({ key = "bags", label = N"Free bag slots", icon = "Interface\\Icons\\INV_Mis
     if not free then return "?" end
     return free <= 2 and ("|cffff4040" .. free .. "|r") or tostring(free)
   end,
-  click = function() if ToggleAllBags then call(ToggleAllBags) end end })
+  click = function() if ToggleAllBags then call(ToggleAllBags) end end, secureClick = bagButton })
 
 local SLOTS = { 1, 3, 5, 6, 7, 8, 9, 10, 16, 17, 18 }
 local function durability()
@@ -644,6 +664,7 @@ end
 local function secureOf(e)
   if e.secureItem then return "item", "item:" .. e.secureItem end
   local sc, b = e.secureClick
+  if type(sc) == "function" then sc = sc() end
   if type(sc) == "table" then for _, n in ipairs(sc) do b = b or _G[n] end else b = sc and _G[sc] end
   if type(b) == "table" then return "click", b end
 end

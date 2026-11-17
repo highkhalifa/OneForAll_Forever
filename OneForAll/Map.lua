@@ -468,6 +468,7 @@ local function padActive()
   local ok, ids = pcall(function() return C_GamePad and C_GamePad.GetAllDeviceIDs and C_GamePad.GetAllDeviceIDs() end)
   return ok and type(ids) == "table" and #ids > 0
 end
+FLT.PadActive = padActive
 local function forceMap(mapID)
   -- the map is open already: only switch it (no panel shown from our code)
   if WorldMapFrame and WorldMapFrame:IsShown() and WorldMapFrame.SetMapID then

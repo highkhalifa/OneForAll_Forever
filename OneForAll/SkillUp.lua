@@ -107,8 +107,10 @@ function SU.Acquire(prof, r, p, opts, fac)
     local fee, spec = SU.Fee(prof, r.s)
     if spec then return nil end -- specialization recipe (Goblin, Gnomish ...): planned only when already known
     -- no fee known: a Classic recipe no trainer teaches (quest / raid patterns), or one of Forever's own new recipes
-    -- (spell IDs from 1000000; their trainers are not in the data - planned with an unknown fee until seen at a trainer)
-    if not fee and r.s < 1000000 then return nil end
+    -- (spell IDs from 1000000). 6.2.9 (Discord Aginda 14.11.: the guide sent people to their alchemy trainer for the
+    -- Discolored Healing Potions, which only the Odd Child / Apothecary Renferrel teach): a Forever recipe is planned
+    -- only when we know who teaches it (Data/ProfessionFees.lua teach) or a trainer offered it to you (its fee is seen)
+    if not fee and (r.s < 1000000 or not SU.RecipeTrainers(prof, r.s)) then return nil end
     return fee or 0, "trainer", fee == nil
   end
   if r.fav then return nil end -- Merchant's Favor: paid with Favor, not planned
@@ -665,6 +667,11 @@ function SU.RecipeTrainers(prof, spell)
     if not fac or t[4] == "AH" or t[4] == fac then
       for _, id in ipairs(ids) do if id == t[1] then out[#out + 1] = t; break end end
     end
+  end
+  -- NPCs who are no profession trainers but teach some Forever recipes (Odd Child ..., 6.2.9)
+  for _, id in ipairs(ids) do
+    local t = FLT.PROFESSION_RANK_NPCS and FLT.PROFESSION_RANK_NPCS[id]
+    if t and (not fac or t[4] == "AH" or t[4] == fac) then out[#out + 1] = t end
   end
   return #out > 0 and out or nil
 end
