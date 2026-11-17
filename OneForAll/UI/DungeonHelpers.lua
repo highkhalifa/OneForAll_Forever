@@ -471,7 +471,12 @@ local function openQuestInLog(id, name)
     end
   end
   if not index then if FLT.Msg then FLT.Msg(name and string.format(L["%s is not in your quest log."], name) or L["This quest is not in your quest log."]) end return false end
-  if QuestLog_SetSelection and QuestLogFrame and ShowUIPanel then
+  -- with a controller the quest log is not opened from our code (6.2.10, Discord kaanu 11.11.: ShowUIPanel tainted the
+  -- panel handling - closing it with the pad hit ADDON_ACTION_FORBIDDEN until /reload): only selected, the player opens it
+  if FLT.PadActive and FLT.PadActive() and SelectQuestLogEntry then
+    SelectQuestLogEntry(index)
+    if FLT.Msg then FLT.Msg(L["Open your quest log - the quest is selected there."]) end
+  elseif QuestLog_SetSelection and QuestLogFrame and ShowUIPanel then
     ShowUIPanel(QuestLogFrame); QuestLog_SetSelection(index)
     if QuestLog_Update then pcall(QuestLog_Update) end
   elseif QuestMapFrame_OpenToQuestDetails and id then

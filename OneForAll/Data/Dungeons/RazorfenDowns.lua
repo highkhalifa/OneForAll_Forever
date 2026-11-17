@@ -96,18 +96,6 @@ FLT.DUNGEON_REGISTRY["Razorfen Downs"] = {
             note = "Ambassador Malcin waits outside the entrance of Razorfen Downs. The quest also appears under Razorfen Kraul, where the Small Scroll that starts it drops.",
         },
         {
-            level = 36,
-            id = 6522,
-            name = "An Unholy Alliance",
-            requires = 28,
-            faction = "Horde",
-            pickup = "Small Scroll, dropped by Charlga Razorflank",
-            objective = "Take the Small Scroll to Varimathras in the Undercity.",
-            turnin = "Varimathras, Undercity",
-            rewardItems = {
-            },
-        },
-        {
             level = 45,
             id = 93604,
             name = "Agamaggan's Blood",

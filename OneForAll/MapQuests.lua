@@ -553,6 +553,8 @@ local AVAIL_ICON, TURNIN_ICON = "|TInterface\\GossipFrame\\AvailableQuestIcon:0|
 function MQ.AddUnitLines(tt, unit)
   if not Q("npcQuestTip") or questieLoaded() or not unit then return end
   if not (UnitExists and UnitExists(unit)) or (UnitIsPlayer and UnitIsPlayer(unit)) then return end
+  -- fading out after the mouse left the NPC (6.2.10, Discord darkgameover 15.11.): no Show() that would stop the fade
+  if not UnitExists("mouseover") then return end
   local name = UnitName and UnitName(unit)
   if type(name) ~= "string" or (FLT.IsSecret and FLT.IsSecret(name)) then return end
   local mapID = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")

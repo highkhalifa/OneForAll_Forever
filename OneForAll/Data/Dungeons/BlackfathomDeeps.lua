@@ -231,6 +231,26 @@ FLT.DUNGEON_REGISTRY["Blackfathom Deeps"] = {
             rewardItems = {
             },
         },
+        {
+            level = 25,
+            id = 1740,
+            liveXPFallback = 5100,
+            name = "The Orb of Soran'ruk",
+            requires = 20,
+            faction = "Both",
+            class = "WARLOCK",
+            classOnly = "WARLOCK",
+            pickup = "Doan Karhan, The Barrens (49.3, 57.2)",
+            objective = "Find 3 Soran'ruk Fragments and 1 Large Soran'ruk Fragment and return them to Doan Karhan in the Barrens.",
+            turnin = "Doan Karhan, The Barrens",
+            rewardChoice = true,
+            rewardItems = {
+                {6898, "Orb of Soran'ruk", 3},
+                {15109, "Staff of Soran'ruk", 3},
+            },
+            rewardSummary = "5,100 XP",
+            note = "Warlock quest. You need fragments from two dungeons: Shadowfang Keep and Blackfathom Deeps.",
+        },
     },
     bosses = {
         {

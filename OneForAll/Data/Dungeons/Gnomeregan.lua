@@ -234,19 +234,6 @@ FLT.DUNGEON_REGISTRY["Gnomeregan"] = {
             },
         },
         {
-            level = 20,
-            id = 79093,
-            name = "Rumi of Gnomeregan: The Collected Works",
-            requires = 1,
-            faction = "Both",
-            pickup = "Owen Thadd, Undercity (73.4, 33.0)",
-            objective = "Collect 'Rumi of Gnomeregan: The Collected Works' and bring it to Garion Wendell in Stormwind.",
-            turnin = "Owen Thadd, Undercity",
-            rewardItems = {
-                {211779, "Comprehension Charm", 1},
-            },
-        },
-        {
             level = 40,
             id = 80325,
             name = "The Mad King",

@@ -269,12 +269,23 @@ end
 
 -- List ------------------------------------------------------------------------------
 local refresh -- the window, below
-local function changed() dirty = true; if refresh then refresh() end end
+local askedOnce -- CL.AddAsk, below
+local function changed() dirty = true; if #list() == 0 then askedOnce = false end; if refresh then refresh() end end
 function CL.Add(prof, spell, n)
   n = math.max(1, math.floor(tonumber(n) or 1))
   for _, e in ipairs(list()) do if e.s == spell then e.n = e.n + n; changed(); return end end
   local l = list(); l[#l + 1] = { prof = prof, s = spell, n = n }
   changed()
+end
+-- adding while the list already has recipes: ask whether to clear it first (6.2.10, user 15.11.: "dass das addon fragt ob
+-- man zuvor die crafting list leeren moechte, falls bereits etwas drin ist"). once = the recipe bar's "+ List": asked
+-- only once until the list is empty again, so a list of several recipes can be built without a question each time
+askedOnce = false
+function CL.AddAsk(addFn, once)
+  if #list() == 0 or (once and askedOnce) or not UI.Confirm then askedOnce = once and true or askedOnce; addFn(); return end
+  UI.Confirm(L["The Crafting List already has recipes on it. Clear it first?"],
+    function() wipe(list()); changed(); askedOnce = true; addFn() end, L["Clear list"], nil,
+    L["Keep and add"], function() askedOnce = true; addFn() end)
 end
 function CL.Count(spell) for _, e in ipairs(list()) do if e.s == spell then return e.n end end return 0 end
 -- one craft of a planned recipe is done: one less on the list, gone at 0 (6.1.5, user 05.11.: had to click "-")
@@ -368,6 +379,24 @@ local function newRow()
     GameTooltip:Show()
   end)
   b.buyBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  -- map button: the nearest vendor who sells it (6.2.10, user 15.11.: "bei simple wood und fine thread, also alle vendor
+  -- mats, waere ein map button gut mit dem vendor am naehesten der das verkauft"); worked out on mouse-over / click
+  b.mapBtn = UI.GoldButton(b, "", 18, 18, UI.ASSET_ROOT .. "icon_map"); b.mapBtn:SetPoint("RIGHT", b.c3, "LEFT", -4, 0)
+  b.mapBtn:SetScript("OnClick", function(self)
+    local v = CL.NearestVendor(self.id)
+    if v and FLT.ShowOnMap then FLT:ShowOnMap({ mapID = v[3], x = v[4], y = v[5], name = v[1] }) end
+  end)
+  b.mapBtn:SetScript("OnEnter", function(self)
+    local v = CL.NearestVendor(self.id)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    if v then
+      local info = C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(v[3])
+      GameTooltip:SetText(L["Nearest vendor"], GOLD[1], GOLD[2], GOLD[3])
+      GameTooltip:AddLine((FLT.NM and FLT.NM(v[1]) or v[1]) .. (info and info.name and (", " .. info.name) or ""), 1, 1, 1)
+    else GameTooltip:SetText(L["Sold by vendors"]) end
+    GameTooltip:Show()
+  end)
+  b.mapBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
   b.count = FLT.NewFS(b, nil, "OVERLAY", "GameFontHighlight"); b.count:SetPoint("LEFT", b.minus, "RIGHT", 2, 0); b.count:SetPoint("RIGHT", b.plus, "LEFT", -2, 0)
   b:SetScript("OnEnter", rowTooltip); b:SetScript("OnLeave", function() GameTooltip:Hide() end)
   -- Shift-click: item link into the chat or the auction house search, Ctrl-click: dressing room (user 26.10.)
@@ -382,7 +411,7 @@ local function acquire()
   local b = pool[used]
   if not b then b = newRow(); pool[used] = b end
   b:ClearAllPoints(); b:Show()
-  for _, k in ipairs({ "mode", "minus", "plus", "del", "count", "c2", "c3", "tag", "craftBtn", "ok", "buyBtn" }) do b[k]:Hide() end
+  for _, k in ipairs({ "mode", "minus", "plus", "del", "count", "c2", "c3", "tag", "craftBtn", "ok", "buyBtn", "mapBtn" }) do b[k]:Hide() end
   b.data = nil
   return b
 end
@@ -418,6 +447,7 @@ end
 
 refresh = function()
   if not (frame and frame:IsShown()) then return end
+  if frame.atr then frame.atr:SetShown(FLT.SkillUp and FLT.SkillUp.HasAuctionator and FLT.SkillUp.HasAuctionator() or false) end
   compute()
   for i = 1, used do pool[i]:Hide() end
   used = 0
@@ -501,10 +531,52 @@ refresh = function()
     local m = CL.MerchantSells and CL.MerchantSells(id)
     if m then
       b.buyBtn.id = id; b.buyBtn.cost = CL.MerchantCost(m, shop[id]); b.buyBtn:Enable(); b.buyBtn:Show()
-    elseif FLT.VENDOR_REAGENTS and FLT.VENDOR_REAGENTS[id] then b.tag:SetText(L["Vendor"]); b.tag:ClearAllPoints(); b.tag:SetPoint("RIGHT", b.c3, "LEFT", -6, 0); b.tag:Show() end
+    elseif FLT.VENDOR_REAGENTS and FLT.VENDOR_REAGENTS[id] then
+      local vs = FLT.VENDOR_REAGENTS[id]
+      local anchor = b.c3
+      if type(vs) == "table" and #vs > 0 then b.mapBtn.id = id; b.mapBtn:Show(); anchor = b.mapBtn end
+      b.tag:SetText(L["Vendor"]); b.tag:ClearAllPoints(); b.tag:SetPoint("RIGHT", anchor, "LEFT", -6, 0); b.tag:Show()
+      b.name:SetPoint("RIGHT", b.c3, "LEFT", -74, 0)
+    end
     b.c3:SetText("|cffff6060" .. shop[id] .. "|r"); b.c3:Show()
   end
   child:SetHeight(-y + 8)
+end
+
+-- the nearest vendor of my faction who sells an item: { name, side, uiMapID, x, y } (Data/VendorReagents.lua, 6.2.10)
+local vlist = {}
+function CL.NearestVendor(id)
+  local ids, npcs = FLT.VENDOR_REAGENTS and FLT.VENDOR_REAGENTS[id], FLT.REAGENT_VENDOR_NPCS
+  if type(ids) ~= "table" or not npcs then return nil end
+  local fac = UnitFactionGroup and UnitFactionGroup("player")
+  fac = fac == "Alliance" and "A" or fac == "Horde" and "H" or nil
+  wipe(vlist)
+  for _, nid in ipairs(ids) do
+    local v = npcs[nid]
+    if v and (not fac or v[2] == "AH" or v[2] == fac) then vlist[#vlist + 1] = v end
+  end
+  if #vlist == 0 then return nil end
+  return UI.NearestOf and UI.NearestOf(vlist, 3) or vlist[1]
+end
+
+-- the missing materials as a shopping list for Auctionator (6.2.10, user 15.11.: "ganz unten einen button der die
+-- fehlenden materialien an auctionator senden kann als einkaufsliste"); what a vendor sells is left out
+local function sendToAuctionator()
+  local SU = FLT.SkillUp
+  if not (SU and SU.SendToAuctionator) then return end
+  local items = {}
+  compute()
+  for id, n in pairs(shop) do
+    if n > 0 and not (FLT.VENDOR_REAGENTS and FLT.VENDOR_REAGENTS[id]) then items[#items + 1] = { id = id, n = n } end
+  end
+  table.sort(items, function(a, b) return a.id < b.id end)
+  local function msg(ok, missing)
+    if not FLT.Msg then return end
+    if #items == 0 then FLT.Msg(L["Nothing to buy at the auction house."]); return end
+    FLT.Msg(ok and L["Shopping list \"OneForAll Crafting List\" is in Auctionator (Shopping tab)."] or L["Auctionator did not take the list (open the auction house once, then try again)."])
+    if ok and missing > 0 then FLT.Msg(string.format(L["%d materials could not be added yet (item data still loading) - send the list again."], missing)) end
+  end
+  if #items > 0 then SU.SendToAuctionator({ ah = items }, "OneForAll Crafting List", msg) else msg(false, 0) end
 end
 
 local function create()
@@ -537,6 +609,14 @@ local function create()
     if UI.Confirm then UI.Confirm(L["Remove everything from the Crafting List?"], function() wipe(list()); changed() end)
     else wipe(list()); changed() end
   end)
+  frame.atr = UI.GoldButton(frame, L["Send to Auctionator"], 150, 20, nil, 11); frame.atr:SetPoint("LEFT", frame.clear, "RIGHT", 8, 0)
+  frame.atr:SetScript("OnClick", sendToAuctionator)
+  frame.atr:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText(L["Send to Auctionator"], GOLD[1], GOLD[2], GOLD[3])
+    GameTooltip:AddLine(L["Puts the missing materials into Auctionator as the shopping list \"OneForAll Crafting List\". Materials a vendor sells are left out."], 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  frame.atr:SetScript("OnLeave", function() GameTooltip:Hide() end)
   -- one secure Craft button, laid over the small "Craft" of the row under the mouse (CL.CraftOverlay)
   CL._hoverCraft = CL.CraftOverlay(frame, "OneForAllCraftListCraft")
   -- like the OneForAll window (user 26.10.): the corner grip scales the whole list, the bottom grip sets its height.
@@ -805,9 +885,14 @@ function CL.RecipeBar(parent)
   local onList = FLT.NewFS(bar, nil, "OVERLAY", "GameFontDisableSmall"); onList:SetPoint("TOP", bar, "TOP", 0, -56)
   add:SetScript("OnClick", function()
     if not cur then return end
-    CL.Add(cur.prof, cur.r.s, n()); amount:ClearFocus()
-    onList:SetText(string.format(L["%d on the list"], CL.Count(cur.r.s))); CL.Show()
-    if bar.onChange then bar.onChange() end -- the recipe view makes room for the "on the list" line
+    local r, prof, cnt = cur.r, cur.prof, n()
+    amount:ClearFocus()
+    CL.AddAsk(function()
+      CL.Add(prof, r.s, cnt)
+      if cur and cur.r == r then onList:SetText(string.format(L["%d on the list"], CL.Count(r.s))) end
+      CL.Show()
+      if bar.onChange then bar.onChange() end -- the recipe view makes room for the "on the list" line
+    end, true)
   end)
   add:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine(L["Add to the Crafting List"], 1, 0.82, 0)

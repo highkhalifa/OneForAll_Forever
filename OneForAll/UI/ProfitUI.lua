@@ -257,9 +257,12 @@ function UI.CreateProfitPage(parent)
   addCL:SetScript("OnClick", function()
     local CL, list = FLT.CraftList, selected()
     if not CL or #list == 0 then return end
-    for _, e in ipairs(list) do CL.Add(prof, e.r.s, (e.r.c or 1) * count(e.r.s)) end -- the list counts items
-    if CL.Show then CL.Show() end
-    if FLT.Msg then FLT.Msg(string.format(L["%d recipes added to the Crafting List."], #list)) end
+    local function add()
+      for _, e in ipairs(list) do CL.Add(prof, e.r.s, (e.r.c or 1) * count(e.r.s)) end -- the list counts items
+      if CL.Show then CL.Show() end
+      if FLT.Msg then FLT.Msg(string.format(L["%d recipes added to the Crafting List."], #list)) end
+    end
+    if CL.AddAsk then CL.AddAsk(add) else add() end -- asks to clear a list that has recipes (6.2.10)
   end)
   local function send()
     local list = selected()

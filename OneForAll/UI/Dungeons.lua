@@ -44,44 +44,9 @@ local handleDungeonItemClick = H.handleDungeonItemClick
 local dungeonItemIcon = H.dungeonItemIcon
 local setBossPortrait = UI.setBossPortrait
 
+-- own pictures (thumbnail, "_bg", "_hdr") for a dungeon without an entry in Data/DungeonLoadscreens.lua - none since
+-- 6.2.10-beta17 (all dungeons and raids use the loading screens or our ls_*.tga there); kept for a new dungeon
 local DUNGEON_ART = {
-  hall=ASSET_ROOT.."Dungeons\\hall_of_thanes",
-  rfc=ASSET_ROOT.."Dungeons\\ragefire_chasm",
-  lordaeron=ASSET_ROOT.."Dungeons\\ruins_of_lordaeron",
-  deadmines=ASSET_ROOT.."Dungeons\\deadmines",
-  wc=ASSET_ROOT.."Dungeons\\wailing_caverns",
-  sfk=ASSET_ROOT.."Dungeons\\shadowfang_keep",
-  bfd=ASSET_ROOT.."Dungeons\\blackfathom_deeps",
-  stockade=ASSET_ROOT.."Dungeons\\the_stockade",
-  excavation=ASSET_ROOT.."Dungeons\\excavation_site",
-  dalaran=ASSET_ROOT.."Dungeons\\city_of_dalaran",
-  gnomeregan=ASSET_ROOT.."Dungeons\\gnomeregan",
-  smgy=ASSET_ROOT.."Dungeons\\sm_graveyard",
-  smlib=ASSET_ROOT.."Dungeons\\sm_library",
-  rfk=ASSET_ROOT.."Dungeons\\razorfen_kraul",
-  smarm=ASSET_ROOT.."Dungeons\\sm_armory",
-  drowned=ASSET_ROOT.."Dungeons\\drowned_city",
-  rfd=ASSET_ROOT.."Dungeons\\razorfen_downs",
-  smcath=ASSET_ROOT.."Dungeons\\sm_cathedral",
-  kroldok=ASSET_ROOT.."Dungeons\\kroldok_stronghold",
-  uldaman=ASSET_ROOT.."Dungeons\\uldaman",
-  zf=ASSET_ROOT.."Dungeons\\zul_farrak",
-  maraudon=ASSET_ROOT.."Dungeons\\maraudon",
-  alcaz=ASSET_ROOT.."Dungeons\\alcaz_prison",
-  st=ASSET_ROOT.."Dungeons\\sunken_temple",
-  brd=ASSET_ROOT.."Dungeons\\blackrock_depths",
-  dme=ASSET_ROOT.."Dungeons\\dire_maul_east",
-  lbrs=ASSET_ROOT.."Dungeons\\lower_blackrock_spire",
-  blackmaw=ASSET_ROOT.."Dungeons\\blackmaw_hold",
-  dmw=ASSET_ROOT.."Dungeons\\dire_maul_west",
-  dmn=ASSET_ROOT.."Dungeons\\dire_maul_north",
-  scholo=ASSET_ROOT.."Dungeons\\scholomance",
-  strat=ASSET_ROOT.."Dungeons\\stratholme",
-  shapers=ASSET_ROOT.."Dungeons\\shapers_terrace",
-  ubrs=ASSET_ROOT.."Dungeons\\upper_blackrock_spire",
-  barrow=ASSET_ROOT.."Dungeons\\barrow_deeps",
-  hyjal=ASSET_ROOT.."Dungeons\\hyjal_summit",
-  onyxia=ASSET_ROOT.."Dungeons\\onyxias_lair",
 }
 
 -- Collapsible level brackets for the browse list (grouped by minimum level).
@@ -163,45 +128,11 @@ local KEY_ICON_NO = "Interface\\RaidFrame\\ReadyCheck-NotReady"
 -- Accent colour per dungeon art (computed from the thumbnail: its bright,
 -- saturated pixels) - used for small details on the detail page.
 local ART_ACCENT = {
-  blackfathom_deeps={0.14,0.53,0.75},
-  city_of_dalaran={0.47,0.30,0.75},
-  deadmines={0.75,0.59,0.36},
-  excavation_site={0.75,0.56,0.08},
-  gnomeregan={0.46,0.75,0.40},
-  hall_of_thanes={0.39,0.52,0.75},
-  ragefire_chasm={0.76,0.20,0.00},
-  razorfen_kraul={0.75,0.30,0.16},
-  ruins_of_lordaeron={0.47,0.71,0.75},
-  shadowfang_keep={0.43,0.47,0.75},
-  sm_graveyard={0.53,0.57,0.75},
-  sm_library={0.75,0.39,0.13},
-  the_stockade={0.75,0.34,0.03},
-  wailing_caverns={0.43,0.75,0.29},
-  alcaz_prison={0.75,0.55,0.30},
-  drowned_city={0.34,0.74,0.75},
-  kroldok_stronghold={0.75,0.39,0.28},
-  maraudon={0.61,0.75,0.74},
-  razorfen_downs={0.75,0.50,0.43},
-  sm_armory={0.75,0.41,0.20},
-  sm_cathedral={0.75,0.46,0.21},
-  sunken_temple={0.44,0.75,0.43},
-  uldaman={0.75,0.49,0.25},
-  zul_farrak={0.75,0.52,0.25},
-  blackmaw_hold={0.55,0.35,0.75},
-  blackrock_depths={0.75,0.33,0.13},
-  dire_maul_east={0.45,0.75,0.25},
-  dire_maul_north={0.75,0.53,0.35},
-  dire_maul_west={0.31,0.40,0.75},
-  lower_blackrock_spire={0.75,0.29,0.08},
-  scholomance={0.40,0.75,0.35},
-  shapers_terrace={0.30,0.55,0.75},
-  stratholme={0.75,0.45,0.21},
-  upper_blackrock_spire={0.75,0.34,0.14},
-  barrow_deeps={0.39,0.54,0.75},
-  hyjal_summit={0.46,0.59,0.75},
-  onyxias_lair={0.75,0.27,0.08},
 }
 local function dungeonAccent(key)
+  -- ls6: the main colour of the loading screen picture (Data/DungeonLoadscreens.lua, entries 10-12)
+  local e=FLT.DUNGEON_LOADSCREENS and FLT.DUNGEON_LOADSCREENS[key]
+  if e and e[12] then return e[10],e[11],e[12] end
   local path=DUNGEON_ART[key]
   local base=path and path:match("([%w_]+)$")
   local c=base and ART_ACCENT[base]
@@ -213,6 +144,42 @@ end
 local function dungeonBackdrop(key,kind)
   local path=DUNGEON_ART[key]
   return path and (path.."_"..kind) or nil
+end
+-- Loading screen test (user 16.11.2026, test version only): the dungeon pictures come from the game's own loading
+-- screens (Data/DungeonLoadscreens.lua, FileDataID + the picture inside the file); w / h = the place it fills,
+-- focus = where the cut sits vertically (0 top .. 1 bottom). Dungeons without a loading screen keep their own art.
+-- e[7], e[8], e[9]: focus x / y and zoom of the entry (wings of one instance show different parts of one picture)
+local function loadscreenCrop(key,aspect,focus)
+  local e=FLT.DUNGEON_LOADSCREENS and FLT.DUNGEON_LOADSCREENS[key]
+  if not e then return nil end
+  local fid,u0,u1,v0,v1,a=e[1],e[2],e[3],e[4],e[5],e[6]
+  local fx,fy,z=e[7] or 0.5,focus or e[8] or 0.5,e[9] or 1
+  if z<1 then -- the used part: z of the width and height, around the focus, inside the picture
+    local w,h=(u1-u0)*z,(v1-v0)*z
+    local cu=math.max(u0+w/2,math.min(u1-w/2,u0+(u1-u0)*fx))
+    local cv=math.max(v0+h/2,math.min(v1-h/2,v0+(v1-v0)*fy))
+    u0,u1,v0,v1,fx,fy=cu-w/2,cu+w/2,cv-h/2,cv+h/2,0.5,0.5
+  end
+  if aspect>=a then
+    local dv=(v1-v0)*a/aspect
+    local t=math.max(v0,math.min(v1-dv,v0+(v1-v0)*fy-dv/2))
+    return fid,u0,u1,t,t+dv
+  end
+  local du=(u1-u0)*aspect/a
+  local c=math.max(u0+du/2,math.min(u1-du/2,u0+(u1-u0)*fx))
+  return fid,c-du/2,c+du/2,v0,v1
+end
+local function setLoadscreen(tex,key,w,h,focus)
+  local fid,l,r,t,b=loadscreenCrop(key,w/h,focus)
+  if not fid then return false end
+  tex:SetTexture(fid); tex:SetTexCoord(l,r,t,b)
+  return true
+end
+-- a fade made with the texture's own alpha (no extra picture); false when the client cannot do it
+local function alphaFade(tex,orient,a1,a2)
+  if tex.SetGradient and CreateColor and pcall(tex.SetGradient,tex,orient,CreateColor(1,1,1,a1),CreateColor(1,1,1,a2)) then return true end
+  if tex.SetGradientAlpha then tex:SetGradientAlpha(orient,1,1,1,a1,1,1,1,a2); return true end
+  return false
 end
 
 
@@ -291,6 +258,7 @@ local function createDungeonPanel(parent)
 
   -- Column positions inside a row (rows sit BOX_PAD px inside their box).
   local SECTION_H, ROW_H, ROW_GAP, BOX_PAD = 32, 46, 0, 0
+  local THUMB_W, THUMB_FADE, THUMB_FADE_L = 110, 34, 18 -- loading screen thumbnail: width, fading part right / left (ls4)
   local ROW_INNER = ROW_W - 2*BOX_PAD
   -- ht8: narrower columns, the faction crest right next to the level
   -- beta43 (user 07.11.: "Territory" ran into "Level" in English): level narrower, its head right-aligned into the free
@@ -494,18 +462,33 @@ local function createDungeonPanel(parent)
     local card=UI.QuietRow(row) -- ht8: no frame, a fine line under the row
 
     -- thumbnail with rounded corners and a thin gold frame
-    local art=row:CreateTexture(nil,"ARTWORK"); art:SetSize(96,36); art:SetPoint("LEFT",4,0)
+    local art=row:CreateTexture(nil,"ARTWORK")
     local artPath=dungeonArt(d.key)
-    if artPath then FLT.SetTex(art, artPath); art:SetTexCoord(0,1,0.1,0.9)
+    local lsKey=FLT.DUNGEON_LOADSCREENS and FLT.DUNGEON_LOADSCREENS[d.key] and d.key
+    -- loading screen (user 16.11.: "Rand aussen weg ... ganze Hoehe der Zeile"): the row's full height, no frame
+    -- ls3 (user 16.11.: "einen kleinen Uebergang vom Bild" to the name): the last THUMB_FADE px are a second texture
+    -- with the rest of the picture that fades out (its own alpha, so it works with the window opacity)
+    local artFade,artFadeL
+    if lsKey then
+      -- ls4 (user 16.11.: "links am Bild auch noch einen Fade"): a third texture with the left edge, fading in
+      artFadeL=row:CreateTexture(nil,"ARTWORK"); artFadeL:SetPoint("TOPLEFT",0,0); artFadeL:SetPoint("BOTTOMLEFT",0,1); artFadeL:SetWidth(THUMB_FADE_L)
+      art:SetPoint("TOPLEFT",artFadeL,"TOPRIGHT"); art:SetPoint("BOTTOMLEFT",artFadeL,"BOTTOMRIGHT"); art:SetWidth(THUMB_W-THUMB_FADE-THUMB_FADE_L)
+      artFade=row:CreateTexture(nil,"ARTWORK"); artFade:SetPoint("TOPLEFT",art,"TOPRIGHT"); artFade:SetPoint("BOTTOMLEFT",art,"BOTTOMRIGHT"); artFade:SetWidth(THUMB_FADE)
+    else art:SetSize(96,36); art:SetPoint("LEFT",4,0) end
+    -- loading screen: set only while the row is in view (each file is a few MB of video memory; loadVisibleArt)
+    if lsKey then art:SetColorTexture(FLT.SkinC(0.10,0.08,0.05,1))
+    elseif artPath then FLT.SetTex(art, artPath); art:SetTexCoord(0,1,0.1,0.9)
     else art:SetColorTexture(FLT.SkinC(0.10,0.08,0.05,1)) end
-    if art.AddMaskTexture and row.CreateMaskTexture then
+    if not lsKey and art.AddMaskTexture and row.CreateMaskTexture then
       local m=row:CreateMaskTexture()
       FLT.SetTex(m, ASSET_ROOT.."thumb_wide_mask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE"); m:SetAllPoints(art)
       art:AddMaskTexture(m)
     end
     -- ht9 (user 30.10.): the thinnest frame - a 1 px line round the picture
-    local afh=CreateFrame("Frame",nil,row); afh:SetPoint("TOPLEFT",art,"TOPLEFT",-1,1); afh:SetPoint("BOTTOMRIGHT",art,"BOTTOMRIGHT",1,-1)
-    UI.RoundRect(row,afh,"OVERLAY",0,8,0,0.62,0.48,0.26,0.9,ASSET_ROOT.."window_ring")
+    if not lsKey then
+      local afh=CreateFrame("Frame",nil,row); afh:SetPoint("TOPLEFT",art,"TOPLEFT",-1,1); afh:SetPoint("BOTTOMRIGHT",art,"BOTTOMRIGHT",1,-1)
+      UI.RoundRect(row,afh,"OVERLAY",0,8,0,0.62,0.48,0.26,0.9,ASSET_ROOT.."window_ring")
+    end
 
     local nm=FLT.NewFS(row, nil,"OVERLAY","GameFontNormal"); nm:SetPoint("LEFT",COL.name,0); nm:SetJustifyH("LEFT"); nm:SetWidth(COL_W.name+4); nm:SetWordWrap(false); nm:SetText(DN(d.name) ~= d.name and DN(d.name) or (d.short or d.name)); nm:SetTextColor(FLT.SkinC(unpack(GOLD)))
     do local font,_,flags=nm:GetFont(); if font then nm:SetFont(font,14,flags) end end
@@ -632,7 +615,7 @@ local function createDungeonPanel(parent)
       questSelection[dungeon.key]=questSelection[dungeon.key] or 1
       if detail._render then detail._render() end
     end)
-    local entry={dungeon=d,row=row,questText=qc,levelText=lv,keyIcon=keyIcon,keyText=keyText,order=di,openQuests=0,
+    local entry={dungeon=d,row=row,art=art,artFade=artFade,artFadeL=artFadeL,lsKey=lsKey,questText=qc,levelText=lv,keyIcon=keyIcon,keyText=keyText,order=di,openQuests=0,
       sortName=(d.short or d.name or ""):lower(),sortSide=sideName,sortZone=zoneText:lower()}
     do -- search text: names, zone and bosses (built once)
       local parts={d.name or "",DN(d.name or ""),d.short or "",zoneText,d.mapZone or ""}
@@ -670,6 +653,46 @@ local function createDungeonPanel(parent)
       return va<vb
     end)
   end
+
+  -- loading screen thumbnails only for the rows in view (+ one row above / below); all let go when the list closes
+  local function loadVisibleArt()
+    local top,bottom=sf:GetTop(),sf:GetBottom()
+    if not top then return end
+    for _,entry in ipairs(browseRows) do
+      if entry.lsKey and not entry.artOn and entry.row:IsShown() then
+        local rt,rb=entry.row:GetTop(),entry.row:GetBottom()
+        if rt and rb and rb<top+ROW_H and rt>bottom-ROW_H then
+          local fid,l,r,t,b=loadscreenCrop(entry.lsKey,THUMB_W/(ROW_H-1))
+          if fid then
+            local mid=l+(r-l)*(THUMB_W-THUMB_FADE)/THUMB_W
+            local midL=l+(r-l)*THUMB_FADE_L/THUMB_W
+            entry.artFadeL:SetTexture(fid); entry.artFadeL:SetTexCoord(l,midL,t,b)
+            if not entry.artFadeL._ofaFade then entry.artFadeL._ofaFade=alphaFade(entry.artFadeL,"HORIZONTAL",0,1) end
+            entry.artFadeL:Show()
+            entry.art:SetTexture(fid); entry.art:SetTexCoord(midL,mid,t,b); entry.art:SetVertexColor(1,1,1,1)
+            entry.artFade:SetTexture(fid); entry.artFade:SetTexCoord(mid,r,t,b)
+            if not entry.artFade._ofaFade then entry.artFade._ofaFade=alphaFade(entry.artFade,"HORIZONTAL",1,0) end
+            entry.artFade:Show(); entry.artOn=true
+          end
+        end
+      end
+    end
+  end
+  local artPending
+  local function queueArt()
+    if artPending then return end
+    artPending=true
+    C_Timer.After(0.05,function() artPending=nil; if browse:IsVisible() then loadVisibleArt() end end)
+  end
+  sf:HookScript("OnVerticalScroll",queueArt)
+  browse:HookScript("OnHide",function()
+    for _,entry in ipairs(browseRows) do
+      if entry.artOn then
+        entry.art:SetTexture(nil); entry.art:SetColorTexture(FLT.SkinC(0.10,0.08,0.05,1))
+        entry.artFade:SetTexture(nil); entry.artFade:Hide(); entry.artFadeL:SetTexture(nil); entry.artFadeL:Hide(); entry.artOn=nil
+      end
+    end
+  end)
 
   local function relayout(fromSearch)
     local cfg=dungeonSettings()
@@ -748,6 +771,7 @@ local function createDungeonPanel(parent)
     emptyText:SetShown(shownSections==0)
     child:SetHeight(math.max(1,-y+10))
     if browse._paintNav then browse._paintNav() end
+    queueArt()
   end
   browse._setView=function(kind)
     local cfg=dungeonSettings()
@@ -976,9 +1000,19 @@ local function createDungeonPanel(parent)
   -- Atmospheric backdrop behind the detail header of the right panel.
   local function detailBackdrop(f,d,strength)
     local path=dungeonBackdrop(d.key,"bg")
-    if path then
+    local lsKey=FLT.DUNGEON_LOADSCREENS and FLT.DUNGEON_LOADSCREENS[d.key] and d.key
+    if path or lsKey then
       local art=f:CreateTexture(nil,"BORDER",nil,0); art:SetPoint("TOPLEFT",3,-3); art:SetPoint("TOPRIGHT",-3,-3); art:SetHeight(112)
-      FLT.SetTex(art, path); art:SetAlpha(strength or 0.85)
+      -- ls6 (user 16.11.: "die Hauptfarbe aus dem Dungeonbild ... einfarbig"): with a loading screen the background is
+      -- the picture's main colour, fading out downwards (no second copy of the picture)
+      if lsKey then
+        local r,g,b=dungeonAccent(d.key)
+        local top=0.42*((strength or 0.85)/0.85)
+        art:SetColorTexture(1,1,1,1)
+        if not (art.SetGradient and CreateColor and pcall(art.SetGradient,art,"VERTICAL",CreateColor(r,g,b,0),CreateColor(r,g,b,top))) then
+          art:SetColorTexture(r,g,b,top*0.5)
+        end
+      else FLT.SetTex(art, path); art:SetAlpha(strength or 0.85) end
       -- painted look: leather grain over the blur, dark vignette behind the portrait
       local lea=f:CreateTexture(nil,"BORDER",nil,1); lea:SetAllPoints(art); FLT.SetTex(lea, ASSET_ROOT.."leather"); lea:SetVertexColor(FLT.SkinC(0.5,0.45,0.4)); lea:SetAlpha(0.15)
       local sh=f:CreateTexture(nil,"BORDER",nil,2); sh:SetPoint("TOPLEFT",art,"TOPLEFT"); sh:SetPoint("BOTTOMLEFT",art,"BOTTOMLEFT"); sh:SetWidth(260); FLT.SetTex(sh, ASSET_ROOT.."shade_lr")
@@ -1040,6 +1074,8 @@ local function createDungeonPanel(parent)
       colorDungeonItemText(it.text,it.rec,it.r,it.g,it.b)
       if it.rec.id and FLT.ItemName then it.text:SetText(FLT.ItemName(it.rec.id,it.rec.name)) end -- German once loaded
       if it.icon then FLT.SetTex(it.icon, dungeonItemIcon(it.rec)) end
+      -- green arrow on upgrades (user 16.11.), like the bags and the game's quest rewards
+      if it.icon and it.rec.id and FLT.GearMarks then FLT.GearMarks.IconArrow(it.icon, it.rec.id) end
     end
   end
 
@@ -1317,6 +1353,7 @@ local function createDungeonPanel(parent)
           end
         end
       end
+      if FLT.GearMarks then for _,it in ipairs(host.items) do if it.rec.id then FLT.GearMarks.IconArrow(it.icon,it.rec.id) end end end
       lchild:SetHeight(math.max(1,-ly+2))
     end
 
@@ -2035,7 +2072,12 @@ local function createDungeonPanel(parent)
     local d=selectedDungeon; if not d then return end
     dtitle:SetText(DN(d.name))
     local ap=dungeonBackdrop(d.key,"hdr")
-    if ap then
+    if FLT.DUNGEON_LOADSCREENS and FLT.DUNGEON_LOADSCREENS[d.key] and setLoadscreen(detailArt,d.key,300,54) then
+      -- loading screen: fades out to the right like the "_hdr" picture, so the title stays readable
+      if not detailArt._ofaFade then detailArt._ofaFade=alphaFade(detailArt,"HORIZONTAL",1,0) end
+      detailArt:Show(); detailArtFrame:Show()
+    elseif ap then
+      if detailArt._ofaFade then alphaFade(detailArt,"HORIZONTAL",1,1); detailArt._ofaFade=nil end
       FLT.SetTex(detailArt, ap); detailArt:SetTexCoord(0,1,0,1); detailArt:Show(); detailArtFrame:Show()
     else
       detailArt:Hide(); detailArtFrame:Hide()

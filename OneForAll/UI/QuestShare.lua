@@ -53,6 +53,15 @@ local function normalize(s)
   return s
 end
 
+-- Scarlet Monastery wings by the minimap's place name (6.2.10, Discord ghostspartan 15.11.: always Graveyard - the Forever
+-- client has no map of its own for the wings, so the map check below finds nothing). English place names; in other
+-- languages it stays as before
+local SM_WINGS = {
+  ["Chamber of Atonement"] = "smgy", ["Forlorn Cloister"] = "smgy", ["Honor's Tomb"] = "smgy",
+  ["Huntsman's Cloister"] = "smlib", ["Gallery of Treasures"] = "smlib", ["Athenaeum"] = "smlib",
+  ["Training Grounds"] = "smarm", ["Footman's Armory"] = "smarm", ["Crusader's Armory"] = "smarm", ["Hall of Champions"] = "smarm",
+  ["Chapel Gardens"] = "smcath", ["Crusader's Chapel"] = "smcath",
+}
 local function findCurrentDungeon()
   if not IsInInstance then return nil end
   local inInstance, instanceType = IsInInstance()
@@ -62,11 +71,13 @@ local function findCurrentDungeon()
   -- Scarlet Monastery wings share one instance ID: tell them apart by the map.
   local uiMap = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
   local byID
+  local wing = SM_WINGS[(GetMinimapZoneText and GetMinimapZoneText()) or ""] or SM_WINGS[(GetSubZoneText and GetSubZoneText()) or ""]
   for _, d in ipairs(FLT.DUNGEONS or {}) do
     if d.instanceID and instanceID and d.instanceID == instanceID then
       if d.uiMaps and uiMap then
         for _, m in ipairs(d.uiMaps) do if m == uiMap then return d end end
       end
+      if wing and d.key == wing then return d end
       byID = byID or d
     end
   end

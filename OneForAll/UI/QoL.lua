@@ -614,7 +614,7 @@ local function createQoLPanel(parent)
   check(g, N"Only tracked quests", N"Counts only the finished quests you track.", N"Quests you do not track (e.g. ones for later or in a dungeon) are left out.", "questXPTracked", 24)
   g = group(c, N"In the world")
   check(g, N"Best sell price on rewards", N"A gold coin on the quest reward choice that sells for the most.", N"In the quest log and when you turn in a quest with two or more rewards to choose from: the one with the highest vendor price (times the count) gets a gold coin at its top right. The green upgrade arrow stays at the top left, so an item can have both.", "questSellCoin")
-  check(g, N"Quest loot sparkles", N"Quest items in the world sparkle again.", N"The game's loot glow. Changes only this one game setting - your outline settings stay as they are. After switching it off, restart the game.", "questSparkles")
+  check(g, N"Quest loot sparkles", N"Quest items in the world sparkle again.", N"The game's loot glow. Quest givers and some other NPCs glow too - that comes with this game setting. Changes only this one setting - your outline settings stay as they are. After switching it off, restart the game.", "questSparkles")
   check(g, N"Quest marks on nameplates", N"A sword or a bag with your progress on mobs you need for a quest.", N"Sword: you must kill it for a quest. Bag: it drops a quest item. With the progress (3/10); nothing once that part is done. Uses the quest lines the game shows in the mob's tooltip. Not inside dungeons yet.", "questMarks")
   choice(g, N"Mark position", N"Where the mark sits on the nameplate.", nil, "questMarkPos", FLT.QuestMarks and FLT.QuestMarks.POS_OPTIONS or { { key = "left", label = N"Left" } }, nil, 24) -- no own switch (user 31.10.)
 

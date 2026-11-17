@@ -455,6 +455,11 @@ function UI.CreateGearPlanner(parent)
   local prefs = (type(OneForAllCharDB) == "table") and OneForAllCharDB or {}
   local selected = 1 -- inventory slot
   local allSlots, suggestAllBtn -- "All slots" on Suggested (6.2.3)
+  local nextPass -- a follow-up pass is scheduled while items still wait for the server (6.2.10)
+  -- 6.2.10-beta2 (user 15.11.: a plate wearer with every armor type still had spikes): the judgement of an item (upgrade
+  -- or not, gain) is kept until the Gear Value changes (GV.gen), and an item asked from the server 3 times without an
+  -- answer is left out - else it kept the follow-up passes going forever
+  local judged, judgedGen, asked = {}, nil, {}
   local enchMode = false -- the right side shows the enchants of the selected slot
   local tab = "suggest"
   local search = ""
@@ -768,12 +773,44 @@ function UI.CreateGearPlanner(parent)
     for s = 1, maxA do if pick[s] then out[#out + 1] = L[ARMOR_NAMES[s]] end end
     return table.concat(out, ", ")
   end
+  -- weapon type filter (6.2.10, Discord locksmite 16.11.): in the filter menu "Weapon type" opens One-Hand / Two-Hand /
+  -- Ranged (each a list of its types on mouseover; a click switches all of them) and Shields. Names from the game
+  -- (localised). prefs.gearWeaponsOff = { [weapon subclass] = true, shield = true } = left out, nil = all.
+  local WEAPON_GROUPS = {
+    { label = INVTYPE_WEAPON or "One-Hand", subs = { 0, 4, 7, 15, 13 } },      -- axes, maces, swords, daggers, fist weapons
+    { label = INVTYPE_2HWEAPON or "Two-Hand", subs = { 1, 5, 8, 6, 10 } },     -- axes, maces, swords, polearms, staves
+    { label = INVTYPE_RANGED or "Ranged", subs = { 2, 3, 18, 16, 19 } },        -- bows, guns, crossbows, thrown, wands
+  }
+  local function subName(cid, sub)
+    local n = (C_Item and C_Item.GetItemSubClassInfo and C_Item.GetItemSubClassInfo(cid, sub))
+      or (GetItemSubClassInfo and GetItemSubClassInfo(cid, sub))
+    return n or tostring(sub)
+  end
+  local function myClass() return f.class or select(2, UnitClass("player")) end
+  local function weaponOK(e)
+    local off = prefs.gearWeaponsOff
+    if not off then return true end
+    if e.cid == 2 then return not off[e.sub] end
+    if e.cid == 4 and e.sub == 6 then return not off.shield end
+    return true
+  end
+  local function weaponNames() -- what is left out, for the tooltip
+    local off = prefs.gearWeaponsOff
+    if not off or not next(off) then return nil end
+    local out, can = {}, canWield[myClass()] or {}
+    for _, g in ipairs(WEAPON_GROUPS) do
+      for _, sub in ipairs(g.subs) do if can[sub] and off[sub] then out[#out + 1] = subName(2, sub) end end
+    end
+    if off.shield and SHIELD[myClass()] then out[#out + 1] = subName(4, 6) end
+    return #out > 0 and ("|cffff7070- " .. table.concat(out, ", ") .. "|r") or nil
+  end
+  if prefs.gearWeaponsOff then prefs.gearWeaponsOff.one, prefs.gearWeaponsOff.two = nil, nil end -- 6.2.10-beta11 keys
   if prefs.gearSource then prefs.gearSources = { [prefs.gearSource] = true }; prefs.gearSource = nil end -- old single choice
   local function picked() local t = prefs.gearSources; return t and next(t) and t or nil end
   local srcBtn = CreateFrame("Button", nil, right); srcBtn:SetSize(22, 22)
   srcBtn.tex = srcBtn:CreateTexture(nil, "ARTWORK"); srcBtn.tex:SetAllPoints(); FLT.SetTex(srcBtn.tex, UI.ASSET_ROOT .. "icon_filter")
   local shl2 = UI.makeTexture(srcBtn, "HIGHLIGHT", 1, 0.82, 0.3, 0.12); shl2:SetAllPoints()
-  local function paintSource() srcBtn.tex:SetAlpha((picked() or armorNames()) and 1 or 0.5) end
+  local function paintSource() srcBtn.tex:SetAlpha((picked() or armorNames() or weaponNames()) and 1 or 0.5) end
   local function shortNames()
     local t = picked(); if not t then return nil end
     local out = {}
@@ -785,37 +822,64 @@ function UI.CreateGearPlanner(parent)
     GameTooltip:AddLine(shortNames() or L["All sources"], 1, 1, 1)
     local an = armorNames()
     if an then GameTooltip:AddLine(L["Armor type"] .. ": " .. an, 1, 1, 1) end
+    local wn = weaponNames()
+    if wn then GameTooltip:AddLine(L["Weapon type"] .. ": " .. wn, 1, 1, 1, true) end
     GameTooltip:AddLine(L["Pick one or more. Bind on Equip: items you can buy in the auction house. Crafted: your own professions with everything, other professions only Bind on Equip."], 0.8, 0.8, 0.8, true)
     GameTooltip:Show()
   end)
   srcBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-  local function openSources(self)
+  -- the menu (user 16.11.): sources, then "Armor type" and "Weapon type" - always there, each opens a list to the right
+  local function buildFilter()
     local t = picked() or {}
-    local opts = { { key = "all", label = L["All sources"], checked = next(t) == nil } }
-    for _, o in ipairs(SOURCES) do opts[#opts + 1] = { key = o.key, label = L[o.label], checked = t[o.key] and true or false } end
+    local items = { { key = "all", label = L["All sources"], checked = next(t) == nil } }
+    for _, o in ipairs(SOURCES) do items[#items + 1] = { key = o.key, label = L[o.label], checked = t[o.key] and true or false } end
     local maxA, defA = armorLimits()
-    do -- also for cloth-only classes (user 10.11.: "Magier -> Stoff"), there the one entry stays checked
-      local pick = armorPick()
-      opts[#opts + 1] = { key = "hdr", label = L["Armor type"], header = true }
-      for s = 1, maxA do
-        local lab = L[ARMOR_NAMES[s]]
-        if s > defA then lab = lab .. "  |cff9d9d9d(" .. string.format(L["From level %d"], 40) .. ")|r" end
-        opts[#opts + 1] = { key = "a" .. s, label = lab, checked = pick[s] and true or false }
+    local pick, armor = armorPick(), {} -- also for cloth-only classes (user 10.11.: "Magier -> Stoff"): the one entry stays on
+    for s = 1, maxA do
+      local lab = L[ARMOR_NAMES[s]]
+      if s > defA then lab = lab .. "  |cff9d9d9d(" .. string.format(L["From level %d"], 40) .. ")|r" end
+      armor[#armor + 1] = { key = "a" .. s, label = lab, checked = pick[s] and true or false }
+    end
+    items[#items + 1] = { label = L["Armor type"], children = armor }
+    local off, can, weapons = prefs.gearWeaponsOff or {}, canWield[myClass()] or {}, {}
+    for gi, g in ipairs(WEAPON_GROUPS) do
+      local kids, on = {}, 0
+      for _, sub in ipairs(g.subs) do
+        if can[sub] then
+          kids[#kids + 1] = { key = "w" .. sub, label = subName(2, sub), checked = not off[sub] }
+          if not off[sub] then on = on + 1 end
+        end
+      end
+      if #kids > 0 then
+        weapons[#weapons + 1] = { key = "g" .. gi, label = g.label, children = kids, checked = on == #kids, part = on > 0 }
       end
     end
-    UI.OpenDropDown(self, opts, nil, function(k)
-      if k == "hdr" then return end
-      local a = tonumber(tostring(k):match("^a(%d)$"))
-      if a then setArmor(a)
-      elseif k == "all" then prefs.gearSources = nil
-      else prefs.gearSources = prefs.gearSources or {}; prefs.gearSources[k] = not prefs.gearSources[k] or nil end
-      paintSource(); refreshList()
-      openSources(self) -- stays open for more picks; a click outside closes it
-    end, 180)
+    if SHIELD[myClass()] then weapons[#weapons + 1] = { key = "shield", label = subName(4, 6), checked = not off.shield } end
+    items[#items + 1] = { label = L["Weapon type"], children = weapons }
+    return items
   end
-  srcBtn:SetScript("OnClick", openSources)
+  local function pickFilter(k)
+    local a = tonumber(tostring(k):match("^a(%d)$"))
+    local w = tonumber(tostring(k):match("^w(%d+)$"))
+    local gi = tonumber(tostring(k):match("^g(%d+)$"))
+    if w or gi or k == "shield" then
+      local off = prefs.gearWeaponsOff or {}
+      if w then off[w] = not off[w] or nil
+      elseif k == "shield" then off.shield = not off.shield or nil
+      else -- a group: all its types on, or all off when all were on
+        local can, allOn = canWield[myClass()] or {}, true
+        for _, sub in ipairs(WEAPON_GROUPS[gi].subs) do if can[sub] and off[sub] then allOn = false end end
+        for _, sub in ipairs(WEAPON_GROUPS[gi].subs) do if can[sub] then off[sub] = allOn or nil end end
+      end
+      prefs.gearWeaponsOff = next(off) and off or nil
+    elseif a then setArmor(a)
+    elseif k == "all" then prefs.gearSources = nil
+    else prefs.gearSources = prefs.gearSources or {}; prefs.gearSources[k] = not prefs.gearSources[k] or nil end
+    paintSource(); refreshList()
+  end
+  srcBtn:SetScript("OnClick", function(self) UI.OpenCascadeMenu(self, buildFilter, pickFilter, 180) end)
   paintSource()
-  do local m = UI.NewMark(srcBtn, L["New: armor type filter."]); m:SetPoint("CENTER", srcBtn, "TOPRIGHT", 0, 0) end -- 6.2.x (TODO.md "Neu-Markierungen")
+  do local m = UI.NewMark(srcBtn, L["New: armor and weapon type filter."]); m:SetPoint("CENTER", srcBtn, "TOPRIGHT", 0, 0) end -- 6.2.x (TODO.md "Neu-Markierungen")
   -- your professions (crafted items: Bind on Pickup only from your own, user 31.10.)
   local myProfs = {}
   local function readProfessions()
@@ -1290,13 +1354,30 @@ function UI.CreateGearPlanner(parent)
       end)
     else
       title:SetText(allSlots and L["All slots"] or slotName) -- without "Suggested:" so the sources fit (user 31.10.); the full text is on mouseover
+      -- 6.2.10 (user 15.11., video: "All slots" with a wide level range lagged without end): at most 120 items the client
+      -- does not have yet are asked from the server per pass; the others wait for the next pass (the Armory redraws when
+      -- items arrive). Items the server does not know (a failed load) are left out.
+      local budget, isCached, failed, waiting = 120, C_Item and C_Item.IsItemDataCachedByID, FLT.ItemLoadFailed, false
       for _, e in ipairs(idx) do
-        if (allSlots or fits(e)) and offhandOK(e) and usable(e, cls, 60) and armorOK(e) and (e.lvl or 0) <= maxLevel and sourceOK(e) then
+        local ask = (allSlots or fits(e)) and offhandOK(e) and usable(e, cls, 60) and armorOK(e) and weaponOK(e) and (e.lvl or 0) <= maxLevel and sourceOK(e)
+          and not (failed and failed[e.id])
+        if ask and isCached and not isCached(e.id) then
+          local n = asked[e.id] or 0
+          if n >= 3 then ask = false
+          elseif budget > 0 then budget = budget - 1; asked[e.id] = n + 1
+          else ask = false; waiting = true end
+        end
+        if ask then
           local lv = reqLevel(e)
           if e.qreq and e.qreq > lv then lv = e.qreq end -- quest rewards: not before the quest can be taken
           -- no required level (0) counts as level 1, else the low items fell out of a "1 - x" range (6.0.2, user 31.10.)
           if lv <= maxLevel and math.max(lv, 1) >= minLevel then list[#list + 1] = e end
         end
+      end
+      -- items still waiting: one more pass in 2 s, in case none of the asked ones arrives (no event, no redraw)
+      if waiting and not nextPass and C_Timer and C_Timer.After then
+        nextPass = true
+        C_Timer.After(2, function() nextPass = nil; if right:IsVisible() then FLT.SafeCall("GearPlanner", refreshList) end end)
       end
       -- biggest Value gain first (items without data yet after them), then closest to the level limit,
       -- item level and quality
@@ -1304,12 +1385,17 @@ function UI.CreateGearPlanner(parent)
       -- only real upgrades (user 16.10.): a higher Value than the worn item, or nothing worn there; items
       -- without data yet come in when the client has loaded them (the Armory redraws on GET_ITEM_INFO_RECEIVED)
       if GV then
+        if judgedGen ~= GV.gen then wipe(judged); judgedGen = GV.gen end
         local n = 0
         for _, e in ipairs(list) do
-          local kind = GV.Change(e.id)
-          if kind == "up" or kind == "new" then
-            local _, d = GV.Upgrade(e.id); e.delta = d; n = n + 1; list[n] = e
+          local j = judged[e.id]
+          if j == nil then
+            local kind = GV.Change(e.id)
+            if kind == "up" or kind == "new" then local _, d = GV.Upgrade(e.id); j = d or 0
+            elseif kind or e.name then j = false end -- judged: no upgrade (kept only once the item's data is there)
+            if j ~= nil then judged[e.id] = j end
           end
+          if j then e.delta = j; n = n + 1; list[n] = e end
         end
         for i = #list, n + 1, -1 do list[i] = nil end
       end

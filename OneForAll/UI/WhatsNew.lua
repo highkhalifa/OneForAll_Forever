@@ -9,32 +9,28 @@ local makeTexture, makeButton = UI.makeTexture, UI.makeButton
 -- 5.6.3 (user 16.10.): only the Gear Planner. 5.7.0 (user 22.10.): Quality of Life, enchants, set buttons.
 -- 6.0.2 (user 01.11.): World Map, dungeon quests, Gear Planner filters, talent import - not shown automatically.
 
-local NEWS_AUTO = true -- set true (and a new NEWS_ID) for the next release with news
+local NEWS_AUTO = false -- set true (and a new NEWS_ID) for the next release with news
 -- 6.1.6 (agreed with the user 06.11.): more reagent sources and more quest "!" on the world map, not shown automatically.
 -- 6.2.0 (user 07.11.): only the languages, shown automatically once.
 -- 6.2.2 (user 09.11.): the info bar and guild members on the world map, shown automatically once.
 -- 6.2.6 (user 12.11.): Skill-Up Helper, Profit, the new stat weights - shown automatically once.
-local NEWS_ID = "6.2.6"
+-- 6.2.10 (user 16.11.): the new dungeon pictures and the armor / weapon type filter - NOT shown automatically.
+local NEWS_ID = "6.2.10"
 
 -- images (optional): pictures in a row under the lines, each { tex, shown width, shown height, texcoord right,
 -- texcoord bottom } (made by tools/art/proc_news.py from the user's screenshots in source_images/news)
 -- qol = the Quality of Life group the button opens; shot = a screenshot behind a "Show me" button (user 09.11.):
 -- { texture, shown width, shown height, texcoord right, texcoord bottom } (tools/art/proc_news.py)
 local NEWS = {
-  { icon = "Interface\\Icons\\INV_Misc_Book_11", title = N"Skill-Up Helper", tab = "professions", sub = "skillup", button = N"Open Skill-Up Helper", hint = N"(Auctionator addon required)",
+  { icon = "Interface\\Icons\\INV_Misc_Map_01", title = N"New dungeon pictures", tab = "dungeons", button = N"Open Dungeons & Raids",
     lines = {
-      N"The cheapest way from your skill to a target for every crafting profession: auction house prices from Auctionator, vendor prices and trainer fees, and what you already own counts as free.",
-      N"A guide window walks you through it step by step and sends the shopping list to Auctionator. Professions > your profession > Skill-Up Helper.",
+      N"Every dungeon and raid shows the game's own loading screen art: in the list, in the header and as the colour behind the boss and quest details.",
+      N"The wings of Scarlet Monastery, Blackrock Spire and Dire Maul have pictures of their own, and so do the raids.",
     } },
-  { icon = "Interface\\Icons\\INV_Misc_Coin_02", title = N"Profit", tab = "professions", sub = "profit", button = N"Open Profit", hint = N"(Auctionator addon required)",
+  { icon = "Interface\\Icons\\INV_Sword_04", title = N"Armor and weapon type filter", tab = "armory", button = N"Open Gear Planner",
     lines = {
-      N"Which recipes are worth crafting right now: material costs against the auction house price, with the investment and profit of your selection.",
-      N"Send the materials of your selection to Auctionator; what is already in your bags is taken off.",
-    } },
-  { icon = "Interface\\Icons\\INV_Misc_Note_05", title = N"New stat weights for the item Value", tab = "armory", button = N"Open Gear Planner", hint = N"(Your own stat weights stay untouched)",
-    lines = {
-      N"The upgrade arrows and percentages now use stat weights based on SimGear Forever by Frostmil, with our own changes for leveling: Intellect and Spirit for casters and healers, Stamina, mana and health per 5 sec.",
-      N"Your own custom weights stay as they are.",
+      N"The filter menu of the Gear Planner has Armor type and Weapon type: cloth, leather, mail or plate, and One-Hand, Two-Hand and Ranged weapons and shields.",
+      N"A click on One-Hand, Two-Hand or Ranged switches the whole group; with the mouse on it you pick single weapon types.",
     } },
 }
 
